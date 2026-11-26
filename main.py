@@ -36,7 +36,7 @@ import time
 from pathlib import Path
 
 # --------------------------------------------------------------------------- policy
-from wards.privacy import POLICY
+from wards.privacy import age_band, POLICY
 from wards.contracts import Clues, RecordRef
 from wards.linkage import link
 from wards.release import Stats as ReleaseStats
@@ -330,11 +330,29 @@ def process_csv(text: str, delimiter: str, rel: str, records: list, ids=None) ->
     if header is None:
         return ""
     field_types = classify_columns(header)
+    labels = [name.strip().casefold() for name in header]
+    district = next((i for i, name in enumerate(labels) if name in {"district", "jila", "जिला"}), None)
     add_reference = ids and any(ref.file == rel for ref in ids) and "PATIENT_NAME" not in field_types
     cleaned_rows = [header + ["patient_pseudonym"] if add_reference else header]
     for i, row in enumerate(rows):
         pid = (ids or {}).get(RecordRef(rel, f"row:{i}"))
         cleaned, redacted = sanitize_row(row, field_types, pid, clean_text)
+        generalized = False
+        for col, (label, value) in enumerate(zip(labels, row)):
+            if not value.strip():
+                continue
+            if label in {"village/mohalla", "village", "gaon", "गाँव"}:
+                cleaned[col] = cleaned[district] if district is not None and district < len(cleaned) and cleaned[district] else "[LOCALITY]"
+            elif label in {"pin", "pin code", "pincode", "zip", "postal code"}:
+                cleaned[col] = "[POSTCODE]"
+            elif label in {"dob", "date of birth", "janm tithi"} or label.startswith("dob ("):
+                cleaned[col] = "[DOB]"
+            elif label in {"age", "umar"} and (match := re.fullmatch(r"(\d{1,3})(?:\s*(?:years?|yrs?|वर्ष))?", value.strip(), re.I)):
+                cleaned[col] = age_band(int(match[1]))
+            else:
+                continue
+            generalized = True
+        Stats.generalized += generalized
         if add_reference:
             cleaned.append(pid or "")
         elif pid and pid not in cleaned:
