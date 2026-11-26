@@ -43,7 +43,7 @@ python main.py --input frontend/sample --output demo_output
 
 Open `demo_output` to see the three outputs. For the full practice run, replace `frontend/sample` with your practice input folder and choose a new or empty output folder. Use a private secret for real releases.
 
-**Local upload interface:** To choose files in a browser and download the cleaned release as a ZIP, run the following commands, then open [the local app](http://127.0.0.1:5057).
+**Local upload interface:** To choose files in a browser and download the cleaned release as a ZIP, run the following commands, then open [the local app](http://127.0.0.1:5058).
 
 ```bash
 python -m pip install -r frontend/requirements.txt
