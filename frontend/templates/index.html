@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Secret Wards · Clean files</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><header><div class="brand"><span class="mark" aria-hidden="true">✚</span> Secret Wards</div><span class="local"><i></i> Local workspace</span></header>
+<main><section class="intro"><div><p class="eyebrow">Privacy checker</p><h1>Clean hospital files</h1><p>Choose files from your computer and download a cleaned copy.</p></div></section>
+<form id="form" class="panel upload"><label class="drop" id="drop" for="files"><strong>Choose files or drop them here</strong><span>CSV, TSV, JSON, FHIR JSON and text notes can be cleaned.</span><small>Other formats are accepted and listed as set aside. Up to 64 MiB per batch.</small><input type="file" id="files" name="files" multiple required></label>
+<ul id="list"></ul><button class="button" id="run">Clean files</button> <span id="status" role="status"></span></form>
+<section id="result" hidden><h2>Processing results</h2><div class="metrics"><div><strong id="clean"></strong>Files cleaned</div><div><strong id="held"></strong>Files set aside</div><div><strong id="linked"></strong>Records given codes</div></div><p id="reasons"></p><section class="panel preview"><div class="bar"><h2>Cleaned output</h2><label id="picker">File <select id="preview-file"></select></label></div><pre id="preview-text" tabindex="0"></pre></section><a id="download" class="button" download="secret-wards-release.zip">↓ Download release ZIP</a><p>Includes cleaned files, a processing report and a record index.</p></section></main><footer>Secret Wards <span>Team Never Give Up</span></footer>
+<script src="/static/vendor/fflate.js"></script>
+<script src="/static/preview.js"></script>
+<script>
+const el=id=>document.getElementById(id), files=el('files');let url;
+function reset(){clearPreview();if(url)URL.revokeObjectURL(url);url=null;el('result').hidden=true;el('status').textContent='';el('list').replaceChildren(...Array.from(files.files,f=>{const li=document.createElement('li');li.textContent=f.name;return li}))}
+files.onchange=reset;
+el('drop').ondragover=e=>e.preventDefault();
+el('drop').ondrop=e=>{e.preventDefault();if(!files.disabled){files.files=e.dataTransfer.files;reset()}};
+el('form').onsubmit=async e=>{e.preventDefault();reset();const data=new FormData(el('form'));el('run').disabled=files.disabled=true;el('status').textContent='Cleaning files…';
+try{const r=await fetch('/process',{method:'POST',body:data});if(!r.ok)throw Error((await r.json()).error);const c=JSON.parse(r.headers.get('X-Run-Counts')), reasons=JSON.parse(r.headers.get('X-Quarantine-Reasons'));const archive=await r.blob();url=URL.createObjectURL(archive);el('download').href=url;el('clean').textContent=c.files_sanitized;el('held').textContent=c.files_quarantined;el('linked').textContent=c.records_linked;el('reasons').textContent=reasons.length?'Set aside because of '+reasons.map(x=>x.replaceAll('_',' ')).join(', ')+'.':'';el('result').hidden=false;el('status').textContent='Finished.';await previewRelease(archive)}catch(err){el('status').textContent=err.message||'Processing failed.'}finally{el('run').disabled=files.disabled=false}};
+</script></body></html>

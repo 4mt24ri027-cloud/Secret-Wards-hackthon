@@ -172,6 +172,18 @@ def extract_clues(ref, fields, narrative="", order="dmy"):
     ids = set(MRN_PATTERN.findall(narrative))
     if len(ids) == 1:
         clues.hospital_ids.extend(ids)
+    elif len(ids) > 1:
+        # A discharge summary can list a patient registration and a visit-only ID.
+        # Prefer the explicitly labelled registration if all other IDs are admissions.
+        labelled = re.findall(
+            r"(?im)^[ \t]*(?:पंजीकरण सं\.?|registration (?:no\.?|number)|UHID|MRN)"
+            r"[ \t]*:[ \t]*([^\s,;]+)", narrative,
+        )
+        patients = {value for value in labelled if value in ids}
+        if len(patients) == 1 and all(
+            re.match(r"(?i)^(?:ADM|IPD?[-/])", value) for value in ids - patients
+        ):
+            clues.hospital_ids.extend(patients)
     return clues
 
 def json_fields(unit):

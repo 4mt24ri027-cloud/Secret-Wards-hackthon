@@ -35,3 +35,7 @@ As shipped it scores about **8 / 100** on the practice data with the official ev
 Run `python3 ../check_dev.py --output ../my_output` after each change.
 
 `config/policy.yaml` holds your privacy settings (age band width, date shift range, minimum group size).
+
+## Local file upload
+
+Run `python -m pip install -r frontend/requirements.txt` and `python frontend/app.py` from the repository root. Open http://127.0.0.1:5057, choose files, and click **Clean files**. The download contains the cleaned files, report and index. Unsupported or unreadable files appear in the report. Each batch uses a fresh key and temporary local storage. Use synthetic data for the demo; protect the host disk before handling sensitive records.
