@@ -20,6 +20,7 @@ Standard library only, Python 3.10+.
 from __future__ import annotations
 
 import base64
+import xml.etree.ElementTree as ET
 import argparse
 import csv
 import datetime as dt
@@ -401,8 +402,68 @@ def process_csv(text: str, delimiter: str, rel: str, records: list, ids=None) ->
     return write_rows(cleaned_rows, delimiter)
 
 
+def redact_bundle_mentions(bundle):
+    """Use declared patient names to clean human-readable fields in this bundle."""
+    names = set()
+    for entry in bundle.get("entry") or []:
+        resource = entry.get("resource") if isinstance(entry, dict) else None
+        if not isinstance(resource, dict) or resource.get("resourceType") != "Patient":
+            continue
+        for name in resource.get("name") or []:
+            if isinstance(name, dict):
+                full = name.get("text")
+                if isinstance(full, str) and full.strip():
+                    names.add(full.strip())
+                given = name.get("given", [])
+                family = name.get("family")
+                if isinstance(given, list) and all(isinstance(n, str) for n in given) and isinstance(family, str) and given:
+                    names.add(" ".join([*given, family]).strip())
+    if not names:
+        return
+    alternatives = "|".join(re.escape(n) for n in sorted(names, key=lambda n: (-len(n), n)) if n)
+    if not alternatives:
+        return
+    pattern = re.compile(r"(?<!\w)(?:" + alternatives + r")(?!\w)", re.I)
+
+    def replace(text):
+        cleaned, count = pattern.subn("[PATIENT_NAME]", text)
+        Stats.identifiers += count
+        return cleaned
+
+    def visit(node):
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+        elif isinstance(node, dict):
+            for field, value in node.items():
+                if field == "display" and isinstance(value, str):
+                    node[field] = replace(value)
+                elif field == "div" and isinstance(value, str) and pattern.search(value):
+                    try:
+                        root = ET.fromstring(value)
+                    except ET.ParseError as exc:
+                        raise ValueError("invalid_narrative") from exc
+                    for element in root.iter():
+                        if element.text:
+                            element.text = replace(element.text)
+                        if element.tail:
+                            element.tail = replace(element.tail)
+                    node[field] = ET.tostring(root, encoding="unicode")
+                elif field == "data" and node.get("contentType") == "text/plain" and isinstance(value, str):
+                    raw = base64.b64decode("".join(value.split()), validate=True)
+                    decoded = decode(raw)
+                    if decoded is None:
+                        raise ValueError("undecodable_attachment")
+                    node[field] = base64.b64encode(replace(decoded).encode("utf8")).decode("ascii")
+                else:
+                    visit(value)
+    visit(bundle)
+
+
 def process_json(text: str, rel: str, records: list, ids=None) -> str:
     data = json.loads(text)
+    if isinstance(data, dict) and data.get("resourceType") == "Bundle":
+        redact_bundle_mentions(data)
     for loc, unit in json_units(data):
         pid = (ids or {}).get(RecordRef(rel, loc))
         if pid and isinstance(unit, dict):

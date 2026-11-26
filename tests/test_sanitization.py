@@ -216,3 +216,18 @@ class DischargeNameTests(unittest.TestCase):
             ("Tara, W/o Arun, discharged.", "[PATIENT_NAME], W/o [RELATIVE_NAME], discharged."),
         ]:
             self.assertEqual(process_text(original, "summary.txt", []), expected)
+
+class FhirMentionTests(unittest.TestCase):
+    def test_display_narrative_and_referral_preserve_reference_and_dose(self):
+        import base64
+        import xml.etree.ElementTree as ET
+        from main import redact_bundle_mentions
+
+        obs = {"subject": {"display": "Tara West", "reference": "Patient/p1"},
+               "text": {"div": '<div xmlns="http://www.w3.org/1999/xhtml">Tara West, 5 mg</div>'},
+               "attachment": {"contentType": "text/plain", "data": base64.b64encode(b"Tara West, 5 mg").decode()}}
+        patient = {"resourceType": "Patient", "name": [{"given": ["Tara"], "family": "West"}]}
+        redact_bundle_mentions({"entry": [{"resource": patient}, {"resource": obs}]})
+        self.assertEqual(obs["subject"], {"display": "[PATIENT_NAME]", "reference": "Patient/p1"})
+        self.assertEqual(ET.fromstring(obs["text"]["div"]).text, "[PATIENT_NAME], 5 mg")
+        self.assertEqual(base64.b64decode(obs["attachment"]["data"]), b"[PATIENT_NAME], 5 mg")
