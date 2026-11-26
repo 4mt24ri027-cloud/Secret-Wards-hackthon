@@ -1,3 +1,57 @@
+## Before Development self-check output
+
+```text
+SECRET WARDS practice self-check (rough guide, not the official score)
+
+1) PERSONAL DATA: 2718 of 3230 pieces still visible (84.1% leaked; lower is better)
+   PATIENT_NAME     leaked  911 / 962   94.7%
+   MRN              leaked  817 / 850   96.1%
+   RELATIVE_NAME    leaked  232 / 232  100.0%
+   VILLAGE          leaked  150 / 150  100.0%
+   PIN              leaked  136 / 136  100.0%
+   HOUSE            leaked  136 / 136  100.0%
+   DOB              leaked  111 / 111  100.0%
+   LOCALITY         leaked  103 / 103  100.0%
+   LANDMARK         leaked   64 / 64   100.0%
+   PHONE            leaked   25 / 308    8.1%
+   AADHAAR_MASKED   leaked   16 / 16   100.0%
+   INSURANCE_ID     leaked   15 / 22    68.2%
+   AADHAAR          leaked    2 / 71     2.8%
+   ABHA_NUMBER      leaked    0 / 46     0.0%
+   PAN              leaked    0 / 22     0.0%
+   EMAIL            leaked    0 / 1      0.0%
+
+   by language: latin 82.8%, deva 100.0%, hinglish 100.0%
+   by hiding place: content 83.5%, filename 100.0%, base64 100.0%,
+                    metadata 100.0%, key 100.0%, header 100.0%
+
+2) CANARIES: 4 of 4 planted canaries found in your output folder
+   (each one costs -3 officially)
+
+3) MEDICAL DATA KEPT: 4855 of 4855 medical values survived (100.0%; higher is better)
+
+4) PATIENT LINKING: precision 0.00, recall 0.00, F0.5 0.00
+   (pseudonyms that wrongly merge different people: 0)
+   you linked nothing yet: write your pseudonym into records.jsonl "patient"
+
+5) RAW COPIES: 0 broken/unsupported files were copied out unchanged
+   instead of quarantined (each costs -5 officially)
+
+Example leaks (type, language, place, file, text):
+    DOB | latin | content | registration/sanjeevani_registration.csv | 12/04/1977
+    RELATIVE_NAME | latin | content | registration/sanjeevani_registration.csv | Naresh Chauhan
+    HOUSE | latin | content | registration/sanjeevani_registration.csv | H.No. 364
+    LOCALITY | latin | content | registration/sanjeevani_registration.csv | Ward 20
+    LOCALITY | latin | content | registration/sanjeevani_registration.csv | Mohalla Raja Bazar
+    LANDMARK | latin | content | registration/sanjeevani_registration.csv | near Pani Tanki
+    VILLAGE | latin | content | registration/sanjeevani_registration.csv | Durgamau Kalan
+    PIN | latin | content | registration/sanjeevani_registration.csv | 229073
+    MRN | latin | content | registration/sanjeevani_registration.csv | SNJ/26/064127
+    PATIENT_NAME | latin | content | registration/sanjeevani_registration.csv | Mahesh Chauhan
+
+Next: fix the biggest leak rows first, keep the medical values, then link patients.
+```
+
 At trail no :1
     
     ================================================================
