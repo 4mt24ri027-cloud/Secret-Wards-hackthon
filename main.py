@@ -39,6 +39,8 @@ from pathlib import Path
 from wards.privacy import POLICY
 from wards.contracts import Clues, RecordRef
 from wards.linkage import link
+from wards.release import Stats as ReleaseStats
+from wards.release import reason_of, safe_rel, write_release, write_sanitized
 
 SECRET = os.environ.get("RAKSHA_SECRET", "").encode()  # never print or write this
 
@@ -349,15 +351,6 @@ def process_text(text: str, rel: str, records: list, ids=None) -> str:
     return (f"Patient: {pid}\n" if pid else "") + clean_text(text)
 
 
-def peak_rss_mb() -> float:
-    try:
-        import resource
-        r = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        return round(r / 1024 if sys.platform != "darwin" else r / 1048576, 1)
-    except Exception:  # noqa: BLE001 - not available on every OS
-        return 0.0
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description="Secret Wards starter pipeline")
     ap.add_argument("--input", required=True)
@@ -368,6 +361,7 @@ def main() -> int:
     san = out / "sanitized"
     san.mkdir(parents=True, exist_ok=True)
     files, records = [], []
+    taken = set()
     sys.setrecursionlimit(5000)
 
     paths = sorted(p for p in inp.rglob("*") if p.is_file())
@@ -385,47 +379,27 @@ def main() -> int:
             text = decode(raw)
             if text is None:
                 raise ValueError("undecodable_text")
-            # TODO(team): a file NAME can contain PII: rename it and report the new path
+            output_rel = safe_rel(rel, taken)
+            file_records = []
             if ext in (".csv", ".tsv"):
-                result = process_csv(text, "\t" if ext == ".tsv" else ",", rel, records, ids)
+                result = process_csv(text, "\t" if ext == ".tsv" else ",", rel, file_records, ids)
             elif ext == ".json":
-                result = process_json(text, rel, records, ids)
+                result = process_json(text, rel, file_records, ids)
             else:
-                result = process_text(text, rel, records, ids)
-            dest = san / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(result, encoding="utf-8", newline="")
-            entry.update(output=f"sanitized/{rel}", status="sanitized")
+                result = process_text(text, rel, file_records, ids)
+            write_sanitized(out, output_rel, result)
+            output = f"sanitized/{output_rel}"
+            records.extend({**row, "file": output} for row in file_records)
+            entry.update(output=output, status="sanitized")
         except (ValueError, RecursionError, UnicodeError, csv.Error) as exc:
             # Fail safe: never copy what we could not clean. The reason holds no file content.
-            reason = str(exc) if isinstance(exc, ValueError) and str(exc).isidentifier() else type(exc).__name__
+            reason = reason_of(exc)
             entry.update(output=None, status="quarantined", reason=reason)
         files.append(entry)
 
-    # Records whose file ended up quarantined must not be listed
-    exported = {e["output"] for e in files if e["output"]}
-    records = [r for r in records if r["file"] in exported]
-
-    with open(out / "records.jsonl", "w", encoding="utf-8") as f:
-        for r in records:
-            f.write(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n")
-
-    n_san = sum(e["status"] == "sanitized" for e in files)
-    report = {
-        "schema": "raksha-report/1",
-        "files": files,
-        "counts": {
-            "files_total": len(files), "files_sanitized": n_san, "files_quarantined": len(files) - n_san,
-            "records_processed": len(records), "identifiers_detected": Stats.identifiers,
-            "records_linked": sum(r["patient"] is not None for r in records),
-            "records_generalized": Stats.generalized, "records_suppressed": Stats.suppressed,
-            "records_quarantined": 0,
-        },
-        "timing": {"seconds": round(time.monotonic() - t0, 2)},
-        "resources": {"peak_rss_mb": peak_rss_mb()},
-    }
-    (out / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    # Only counts go to stdout: stdout and stderr are scanned for PII.
+    stats = ReleaseStats(Stats.identifiers, Stats.generalized, Stats.suppressed)
+    write_release(out, files, records, stats, time.monotonic() - t0)
+    n_san = sum(entry["status"] == "sanitized" for entry in files)
     print(f"files {len(files)} sanitized {n_san} quarantined {len(files) - n_san} records {len(records)}")
     return 0
 
