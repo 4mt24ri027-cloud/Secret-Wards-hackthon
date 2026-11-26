@@ -80,3 +80,25 @@ class ContactPrivacyTests(unittest.TestCase):
         data = base64.b64encode(b"Consent witnessed by Tara South, dose 5 mg.").decode()
         result = clean_value({"contentType": "text/plain", "data": data})
         self.assertEqual(base64.b64decode(result["data"]), b"Consent witnessed by [WITNESS_NAME], dose 5 mg.")
+
+class NarrativeIdentifierTests(unittest.TestCase):
+    def test_hospital_ids_with_clinical_numbers(self):
+        from main import clean_text
+
+        for identifier in ["UHID-093482", "SNJ/24/012345", "ipd-2025-01234", "JJH-1234567"]:
+            note = f"Seen under {identifier}. BP 120/80, dose 650 mg."
+            self.assertEqual(clean_text(note), "Seen under [MRN]. BP 120/80, dose 650 mg.")
+
+class StructuredRegistrationTests(unittest.TestCase):
+    def test_registration_and_fhir_names(self):
+        from main import clean_value
+
+        registration = {"patients": [{"name": {"local": "तारा", "last": "West"},
+                                     "guardian": {"name": "Example Guardian"},
+                                     "address": {"line": "House 7", "district": "Example District"}}]}
+        patient = clean_value(registration)["patients"][0]
+        self.assertEqual(set(patient["name"].values()), {"[PATIENT_NAME]"})
+        self.assertEqual(patient["guardian"]["name"], "[RELATIVE_NAME]")
+        self.assertEqual(patient["address"], {"line": "[ADDRESS]", "district": "Example District"})
+        resource = {"resourceType": "Patient", "name": [{"given": ["Tara"], "use": "official"}]}
+        self.assertEqual(clean_value(resource)["name"], [{"given": ["[PATIENT_NAME]"], "use": "official"}])

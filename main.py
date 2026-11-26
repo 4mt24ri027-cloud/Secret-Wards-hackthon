@@ -101,6 +101,11 @@ def age_band(age: int) -> str:
 PERSON_WORD = r"[A-Z][^\W\d_]*(?:[-'’][^\W\d_]+)*"
 PERSON_NAME = rf"{PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{1,3}}"
 PATTERNS = [
+    # Hospital record numbers in narrative text, including year/serial forms.
+    ("MRN", re.compile(
+        r"(?i)(?<![\w/-])(?:UHID|MRN|IPD|IP|ADM|JJH|SNJ|DHH)"
+        r"(?:[-/](?:IPD|\d{2,4}))?[-/]?\d{5,9}(?![\w/-])"
+    )),
     ("CONTACT_NAME", re.compile(rf"(?<=(?i:called by) ){PERSON_NAME}(?=[ \t]+[+\d])")),
     ("WITNESS_NAME", re.compile(rf"(?<=(?i:witnessed by) ){PERSON_NAME}(?=[,.;]|$)")),
     ("VISITOR_NAME", re.compile(rf"{PERSON_NAME}(?=[ \t]*\((?i:attendant|visitor)\b)")),
@@ -133,6 +138,22 @@ def clean_text(text: str) -> str:
     return text
 
 
+def clean_person_name(value, placeholder):
+    """Keep structured name shapes and replace only name-bearing strings."""
+    if isinstance(value, str) and value.strip():
+        Stats.identifiers += 1
+        return placeholder
+    if isinstance(value, list):
+        return [clean_person_name(item, placeholder) for item in value]
+    if isinstance(value, dict):
+        parts = {"first", "last", "local", "given", "family", "text", "middle"}
+        return {
+            clean_text(k): clean_person_name(v, placeholder) if k.casefold() in parts else clean_value(v, k)
+            for k, v in value.items()
+        }
+    return value
+
+
 def clean_value(v, parent_key=""):
     if isinstance(v, str):
         return clean_text(v)
@@ -143,9 +164,12 @@ def clean_value(v, parent_key=""):
         cleaned = {}
         for key, value in v.items():
             field = key.strip().casefold()
-            if parent_key == "patient" and field == "name" and isinstance(value, str) and value.strip():
-                cleaned[clean_text(key)] = "[PATIENT_NAME]"
-                Stats.identifiers += 1
+            if field == "name" and (parent_key in {"patient", "patients"} or v.get("resourceType") == "Patient"):
+                cleaned[clean_text(key)] = clean_person_name(value, "[PATIENT_NAME]")
+            elif field == "name" and parent_key == "guardian":
+                cleaned[clean_text(key)] = clean_person_name(value, "[RELATIVE_NAME]")
+            elif field == "line" and parent_key == "address":
+                cleaned[clean_text(key)] = clean_person_name(value, "[ADDRESS]")
             elif parent_key == "raised_by" and field == "name" and isinstance(value, str) and value.strip():
                 cleaned[clean_text(key)] = "[CONTACT_NAME]"
                 Stats.identifiers += 1
