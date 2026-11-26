@@ -1,5 +1,6 @@
 """P1: field classification, text span patterns and per-record patient clues."""
 from __future__ import annotations
+from .dates import detect_order, parse_date
 
 import json
 import re
@@ -136,11 +137,16 @@ VISIT_BP_SUBJECT = re.compile(
 GENERIC_BP_SUBJECTS = {"patient", "pt", "mareez", "mariz", "mother", "father",
                        "baby", "child", "doctor", "nurse", "ward", "aaj", "kal"}
 
-# --------------------------------------------------------------------------- patient clues
-def extract_clues(ref, fields, narrative=""):
+_AGE_KEYS = {"age", "umar", "आयु", "उम्र"}
+# finest first; the LAST one is what privacy._quasi treats as the coarse location
+_LOC_RANK = {"village": 0, "villagemohalla": 0, "gaon": 0, "गाँव": 0, "ग्राम": 0, "city": 0,
+             "mohalla": 0, "locality": 0, "tehsil": 1, "block": 1, "district": 2, "jila": 2, "जिला": 2}
+
+def extract_clues(ref, fields, narrative="", order="dmy"):
     clues = Clues(ref)
     targets = {"PATIENT_NAME": clues.names, "MRN": clues.hospital_ids, "PHONE": clues.phones,
                "RELATIVE_NAME": clues.relatives, "AADHAAR": clues.gov_ids, "ABHA_NUMBER": clues.gov_ids}
+    located = []
     for key, value in fields:
         if not isinstance(value, (str, int)) or not str(value).strip():
             continue
@@ -150,11 +156,19 @@ def extract_clues(ref, fields, narrative=""):
             kind = "MRN"
         if kind in targets:
             if kind == "MRN" and raw.isdigit():
-                # A bare local serial lacks a cross-hospital namespace.
                 raw = ref.file + "|" + raw
             targets[kind].append(raw)
         if key.casefold() in {"gender", "sex"}:
             clues.sex = raw
+        norm = _normalize(key)
+        if norm.startswith("dob") or norm in {"dateofbirth", "birthdate", "janmtithi"}:
+            if (d := parse_date(raw, order)):
+                clues.dob = d.isoformat()
+        elif norm in _AGE_KEYS and (m := re.match(r"\d{1,3}", raw)):
+            clues.age = int(m[0])
+        elif norm in _LOC_RANK:
+            located.append((_LOC_RANK[norm], raw))
+    clues.locations = [v for _, v in sorted(located, key=lambda t: t[0])]
     ids = set(MRN_PATTERN.findall(narrative))
     if len(ids) == 1:
         clues.hospital_ids.extend(ids)
@@ -195,11 +209,13 @@ def json_fields(unit):
 def collect_clues(parsed: ParsedFile) -> list[Clues]:
     """One Clues object per record, with the same locators the sanitizer writes."""
     rel = parsed.rel
+    order = detect_order(parsed.text)
     if parsed.kind == "table":
         rows = read_rows(parsed.text, parsed.delimiter)
         header = next(rows, [])
-        return [extract_clues(RecordRef(rel, f"row:{i}"), zip(header, row)) for i, row in enumerate(rows)]
+        return [extract_clues(RecordRef(rel, f"row:{i}"), zip(header, row), order=order)
+                for i, row in enumerate(rows)]
     if parsed.kind == "json":
-        return [extract_clues(RecordRef(rel, loc), json_fields(unit))
+        return [extract_clues(RecordRef(rel, loc), json_fields(unit), order=order)
                 for loc, unit in json_units(load_json(parsed.text))]
     return [extract_clues(RecordRef(rel, "doc"), [], parsed.text)]
