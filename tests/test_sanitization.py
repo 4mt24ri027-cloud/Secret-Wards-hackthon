@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from main import process_csv
 from wards.formats import read_rows
@@ -10,9 +9,10 @@ class HospitalIdentifierTests(unittest.TestCase):
         for header in ("UHID", "MRN", "Medical Record Number", "Hospital Number"):
             with self.subTest(header=header):
                 source = f"{header},Dose\n00123,650 mg\n"
-                with patch("main.link_records", return_value=None) as link:
-                    result = process_csv(source, ",", "sample.csv", [])
-                link.assert_called_once_with("00123,650 mg")
+                from main import file_clues
+                clues = file_clues(source, ".csv", "sample.csv")
+                self.assertTrue(clues[0].hospital_ids[0].endswith("00123"))
+                result = process_csv(source, ",", "sample.csv", [])
                 self.assertEqual(list(read_rows(result)), [[header, "Dose"], ["[MRN]", "650 mg"]])
 
     def test_identity_columns_redact_partial_values_and_keep_clinical_cells(self):
