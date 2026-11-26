@@ -179,3 +179,12 @@ class DischargeDemographicsTests(unittest.TestCase):
             note = f"{label}: Example Village - 123456\r\nDOB: 17/05/1986\r\nAdmission: 12/04/2025\nDose: 650 mg"
             expected = f"{label}: [ADDRESS]\r\nDOB: [DOB]\r\nAdmission: 12/04/2025\nDose: 650 mg"
             self.assertEqual(process_text(note, "sample.txt", []), expected)
+
+class VillagePrivacyTests(unittest.TestCase):
+    def test_prescription_and_registration_locality(self):
+        from main import process_text
+
+        note = "ग्राम: उदाहरण\nतारीख: 12/05/2025\nDose: 5 mg"
+        self.assertEqual(process_text(note, "rx.txt", []), note.replace("उदाहरण", "[ADDRESS]"))
+        result = process_csv("City,District,Dose\nExample Village,Example District,5 mg\n", ",", "r.csv", [])
+        self.assertEqual(list(read_rows(result))[1], ["Example District", "Example District", "5 mg"])

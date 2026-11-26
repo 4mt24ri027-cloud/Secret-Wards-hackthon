@@ -355,7 +355,7 @@ def process_csv(text: str, delimiter: str, rel: str, records: list, ids=None) ->
         for col, (label, value) in enumerate(zip(labels, row)):
             if not value.strip():
                 continue
-            if label in {"village/mohalla", "village", "gaon", "गाँव"}:
+            if label in {"village/mohalla", "village", "gaon", "गाँव", "ग्राम"} or (label == "city" and district is not None):
                 cleaned[col] = cleaned[district] if district is not None and district < len(cleaned) and cleaned[district] else "[LOCALITY]"
             elif label in {"pin", "pin code", "pincode", "zip", "postal code"}:
                 cleaned[col] = "[POSTCODE]"
@@ -395,7 +395,7 @@ def process_json(text: str, rel: str, records: list, ids=None) -> str:
     return json.dumps(clean_value(data), ensure_ascii=False, indent=2) + "\n"
 
 
-NOTE_ADDRESS = re.compile(r"(?im)^([ \t]*(?:address|पता)[ \t]*:[ \t]*)[^\r\n]+")
+NOTE_ADDRESS = re.compile(r"(?im)^([ \t]*(?:address|पता|village|ग्राम|गाँव)[ \t]*:[ \t]*)[^\r\n]+")
 NOTE_DOB = re.compile(
     r"(?im)^([ \t]*(?:DOB|date of birth|जन्म तिथि)[ \t]*:[ \t]*)"
     r"\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b"
