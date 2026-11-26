@@ -146,3 +146,15 @@ class RegistrationHeaderTests(unittest.TestCase):
         self.assertEqual(classify_columns(["PatientID", "DOB (MM/DD/YYYY)", "FirstName", "LastName"])[2:],
                          ["PATIENT_NAME", "PATIENT_NAME"])
         self.assertEqual(classify_columns(["Department", "FirstName"]), [None, None])
+
+class ExportMetadataTests(unittest.TestCase):
+    def test_source_path_is_removed_without_changing_other_fields(self):
+        from main import clean_value
+
+        for path in [r"D:\exports\Example_Patient_001\report.json", "/exports/Example_Patient/report.json"]:
+            report = {"_export_meta": {"source_path": path, "system": "OPD"},
+                      "result": "245 mg/dL"}
+            self.assertEqual(clean_value(report), {
+                "_export_meta": {"source_path": "[SOURCE_PATH]", "system": "OPD"},
+                "result": "245 mg/dL"
+            })
