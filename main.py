@@ -98,6 +98,11 @@ def age_band(age: int) -> str:
 #     "1-0-1" are doses, "Parkinson's disease" is not a person;
 #   * JSON keys, CSV headers, file names and base64 attachments can all hold PII.
 PATTERNS = [
+    # A name at the start of a Hinglish note, followed by an honorific and BP reading.
+    ("PATIENT_NAME", re.compile(
+        r"(?m)^[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}"
+        r"(?=[ \t]+(?i:behenji|bhenji|amma|bhai|babu|didi|ji|sahab)[ \t]+(?i:ka bp)[ \t]+\d{2,3}/\d{2,3}\b)"
+    )),
     ("PHONE", re.compile(r"(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")),
     ("AADHAAR", re.compile(r"(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}(?!\d)")),
     ("EMAIL", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")),

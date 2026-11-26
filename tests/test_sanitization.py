@@ -54,3 +54,17 @@ class JsonPatientNameTests(unittest.TestCase):
         source = json.dumps({"visits": [visit]})
         cleaned = json.loads(process_json(source, "opd/example.json", []))
         self.assertEqual(cleaned["visits"], [{**visit, "patient_ref": "[PATIENT_REF]"}])
+
+class HinglishNoteTests(unittest.TestCase):
+    def test_names_before_honorific_and_bp(self):
+        from main import clean_text
+
+        for name, title in [("Nila", "behenji"), ("Mira", "bhenji"), ("Tara", "amma"), ("Aman Dev", "bhai")]:
+            suffix = f" {title} ka BP 112/78, review in 2 weeks."
+            self.assertEqual(clean_text(name + suffix), "[PATIENT_NAME]" + suffix)
+
+    def test_clinical_and_clinician_text(self):
+        from main import clean_text
+
+        for note in ["bhenji ka BP 112/78", "Patient ka BP 112/78", "Dr. Aman bhai ka BP 120/80", "Dolo 650 mg"]:
+            self.assertEqual(clean_text(note), note)
