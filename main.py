@@ -19,6 +19,7 @@ Standard library only, Python 3.10+.
 """
 from __future__ import annotations
 
+import base64
 import argparse
 import csv
 import datetime as dt
@@ -97,7 +98,12 @@ def age_band(age: int) -> str:
 #   * the meaning traps: "C/O fever" is a complaint, "Dr. Ramesh" stays, "Dolo 650", "5 mg",
 #     "1-0-1" are doses, "Parkinson's disease" is not a person;
 #   * JSON keys, CSV headers, file names and base64 attachments can all hold PII.
+PERSON_WORD = r"[A-Z][^\W\d_]*(?:[-'’][^\W\d_]+)*"
+PERSON_NAME = rf"{PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{1,3}}"
 PATTERNS = [
+    ("CONTACT_NAME", re.compile(rf"(?<=(?i:called by) ){PERSON_NAME}(?=[ \t]+[+\d])")),
+    ("WITNESS_NAME", re.compile(rf"(?<=(?i:witnessed by) ){PERSON_NAME}(?=[,.;]|$)")),
+    ("VISITOR_NAME", re.compile(rf"{PERSON_NAME}(?=[ \t]*\((?i:attendant|visitor)\b)")),
     # A name at the start of a Hinglish note, followed by an honorific and BP reading.
     ("PATIENT_NAME", re.compile(
         r"(?m)^[A-Z][a-z]+(?:[ -][A-Z][a-z]+){0,2}"
@@ -140,6 +146,17 @@ def clean_value(v, parent_key=""):
             if parent_key == "patient" and field == "name" and isinstance(value, str) and value.strip():
                 cleaned[clean_text(key)] = "[PATIENT_NAME]"
                 Stats.identifiers += 1
+            elif parent_key == "raised_by" and field == "name" and isinstance(value, str) and value.strip():
+                cleaned[clean_text(key)] = "[CONTACT_NAME]"
+                Stats.identifiers += 1
+            elif field == "data" and str(v.get("contentType", "")).split(";")[0].strip().lower() == "text/plain":
+                if not isinstance(value, str):
+                    raise ValueError("invalid_attachment")
+                payload = base64.b64decode("".join(value.split()), validate=True)
+                decoded = decode(payload)
+                if decoded is None:
+                    raise ValueError("undecodable_attachment")
+                cleaned[key] = base64.b64encode(clean_text(decoded).encode("utf-8")).decode("ascii")
             elif field == "patient_ref" and isinstance(value, str) and value.strip():
                 cleaned[clean_text(key)] = "[PATIENT_REF]"
                 Stats.identifiers += 1

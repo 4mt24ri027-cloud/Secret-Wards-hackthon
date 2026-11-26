@@ -68,3 +68,15 @@ class HinglishNoteTests(unittest.TestCase):
 
         for note in ["bhenji ka BP 112/78", "Patient ka BP 112/78", "Dr. Aman bhai ka BP 120/80", "Dolo 650 mg"]:
             self.assertEqual(clean_text(note), note)
+
+class ContactPrivacyTests(unittest.TestCase):
+    def test_release_channels(self):
+        import base64
+        from main import clean_text, clean_value
+
+        self.assertEqual(clean_text("Ada North (attendant, bed 9)"), "[VISITOR_NAME] (attendant, bed 9)")
+        self.assertTrue(clean_text("called by Arun West 98765-43210").startswith("called by [CONTACT_NAME] "))
+        self.assertEqual(clean_value({"raised_by": {"name": "Mira East"}})["raised_by"]["name"], "[CONTACT_NAME]")
+        data = base64.b64encode(b"Consent witnessed by Tara South, dose 5 mg.").decode()
+        result = clean_value({"contentType": "text/plain", "data": data})
+        self.assertEqual(base64.b64decode(result["data"]), b"Consent witnessed by [WITNESS_NAME], dose 5 mg.")
