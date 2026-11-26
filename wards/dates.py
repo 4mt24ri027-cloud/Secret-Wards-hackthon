@@ -47,9 +47,9 @@ def parse_date(value: str, order: str = "dmy") -> dt.date | None:
     return None
 
 
-def shift_dates(text: str, days: int, order: str = "dmy") -> str:
-    """Move every date in `text` by `days`, keeping its original layout."""
-    if not days or not text:
+def shift_dates(text: str, days: int, order: str = "dmy", month_only: bool = False) -> str:
+    """Move every date in `text` by `days`, keeping its original layout (or YYYY-MM if month_only)."""
+    if (not days and not month_only) or not text:
         return text
     delta = dt.timedelta(days=days)
 
@@ -58,6 +58,8 @@ def shift_dates(text: str, days: int, order: str = "dmy") -> str:
             new = dt.date(int(m[4]), _MON.index(m[3][:3].lower()) + 1, int(m[1])) + delta
         except ValueError:
             return m[0]
+        if month_only:
+            return f"{new.year:04d}-{new.month:02d}"
         name = _FULL[new.month - 1] if len(m[3]) > 3 else _FULL[new.month - 1][:3]
         name = name.upper() if m[3].isupper() else name.lower() if m[3].islower() else name
         return f"{_pad(new.day, m[1])}{m[2]}{name}{m[2]}{new.year}"
@@ -67,6 +69,8 @@ def shift_dates(text: str, days: int, order: str = "dmy") -> str:
             new = dt.date(int(m[1]), int(m[3]), int(m[4])) + delta
         except ValueError:
             return m[0]
+        if month_only:
+            return f"{new.year:04d}{m[2]}{new.month:02d}"
         return f"{new.year:04d}{m[2]}{new.month:02d}{m[2]}{new.day:02d}"
 
     def numeric(m):
@@ -75,6 +79,8 @@ def shift_dates(text: str, days: int, order: str = "dmy") -> str:
             new = dt.date(int(m[4]), int(mon), int(day)) + delta
         except ValueError:
             return m[0]
+        if month_only:
+            return f"{new.year:04d}-{new.month:02d}"
         d, mo = _pad(new.day, day), _pad(new.month, mon)
         first, second = (d, mo) if order == "dmy" else (mo, d)
         return f"{first}{m[2]}{second}{m[2]}{new.year}"

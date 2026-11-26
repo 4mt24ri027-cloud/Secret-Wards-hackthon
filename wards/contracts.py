@@ -39,6 +39,7 @@ class Clues:
     age: int | None = None
     sex: str | None = None                                 # "M" / "F" / "O" / None
     locations: list[str] = field(default_factory=list)     # village/mohalla/city/pincode, finest first
+    conditions: list[str] = field(default_factory=list)    # ICD-10 codes for rare-condition k-anonymity
 
 
 @dataclass

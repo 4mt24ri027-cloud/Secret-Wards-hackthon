@@ -69,7 +69,7 @@ def clean_text(text: str) -> str:
     for kind, rx in PATTERNS:
         text, n = rx.subn(f"[{kind}]" if kind != "NAME" else " [NAME]", text)
         _count.identifiers += n
-    return shift_dates(band_ages(text), _count.shift, _count.order)
+    return shift_dates(band_ages(text), _count.shift, _count.order, month_only=(_count.widen > 1))
 
 def clean_person_name(value, placeholder):
     """Keep structured name shapes and replace only name-bearing strings."""
@@ -160,9 +160,13 @@ def _clean_value(v, parent_key, units=None):
                 _count.identifiers += 1
                 cleaned[new_key] = "[DOB]"
                 continue
-            if parent_key == "address" and field in {"postalcode", "pin", "city", "village"} and isinstance(value, str) and value:
+            if parent_key == "address" and field in {"postalcode", "pin", "city", "village", "district", "tehsil", "block"} and isinstance(value, str) and value:
                 if field in {"postalcode", "pin"}:
                     cleaned[key] = "[POSTCODE]"
+                elif _count.widen > 1 and int(POLICY.get("rare_drop_district", 1)):
+                    cleaned[key] = "[DISTRICT]" if field == "district" else "[LOCALITY]"
+                elif field == "district":
+                    cleaned[key] = clean_text(value)
                 else:
                     cleaned[key] = clean_text(v["district"]) if isinstance(v.get("district"), str) and v["district"] else "[LOCALITY]"
                 continue
@@ -189,6 +193,16 @@ def _clean_value(v, parent_key, units=None):
                 _count.identifiers += 1
             elif field == "data" and str(v.get("contentType", "")).split(";")[0].strip().lower() == "text/plain":
                 cleaned[key] = _plain_attachment(value, clean_text)
+            elif field in {"base64", "attachment", "payload"} and isinstance(value, str) and len(value) >= 16 and len(value.strip()) % 4 == 0:
+                try:
+                    raw_b = base64.b64decode(value.strip(), validate=True)
+                    dec = decode(raw_b)
+                    if dec and sum(ch.isprintable() or ch in "\r\n\t" for ch in dec) / max(1, len(dec)) > 0.9:
+                        cleaned[new_key] = base64.b64encode(clean_text(dec).encode("utf-8")).decode("ascii")
+                    else:
+                        cleaned[new_key] = clean_value(value, field, units=units)
+                except Exception:
+                    cleaned[new_key] = clean_value(value, field, units=units)
             elif (classify_header(key) in {"AADHAAR", "INSURANCE_ID"}
                   and isinstance(value, (str, int)) and str(value).strip()):
                 cleaned[new_key] = f"[{classify_header(key)}]"
@@ -305,9 +319,12 @@ def _clean_json(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dic
     data = load_json(parsed.text)
     records = []
     units = {}
+    generalized = 0
     for loc, unit in json_units(data):
         units[id(unit)] = decisions, parsed.rel, loc
         pid = _enter(decisions, parsed.rel, loc)
+        if _count.widen > 1:
+            generalized += 1
         if pid and isinstance(unit, dict):
             if unit.get("resourceType") == "Bundle":
                 unit["identifier"] = {"system": "urn:secret-wards:pseudonym", "value": pid}
@@ -315,7 +332,7 @@ def _clean_json(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dic
                 unit["patient_pseudonym"] = pid
         records.append({"loc": loc, "patient": pid})
     _count.shift, _count.widen = 0, 1
-    return dump_json(clean_value(data, units=units)), records, 0
+    return dump_json(clean_value(data, units=units)), records, generalized
 
 def _clean_document(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dict], int]:
     pid = _enter(decisions, parsed.rel, "doc")

@@ -2,8 +2,9 @@ age_band_years: 5          # ages become bands like 45-49 (the band always conta
 age_top_code: 85           # ages >= this become "85+" (very old people are easy to re-identify)
 rare_age_widen: 4          # rare records get bands 4x wider (20 years)
 rare_drop_district: 1      # rare records also lose the district in tables
-date_shift_max_days: 365   # every date of one patient moves by the same secret offset
+date_shift_max_days: 730   # every date of one patient moves by the same secret offset
 min_group_size: 5          # k-anonymity threshold for (age band, sex, location)
 suppress_rare: 1
 location_level: district
 reference_year: 2026       # fixed year used to turn a birth year into an age (keeps runs identical)
+weak_singleton_gets_id: 1  # give isolated records their own private pseudonym ID (improves recall)

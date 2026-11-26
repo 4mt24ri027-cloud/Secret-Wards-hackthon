@@ -274,7 +274,9 @@ def _evaluate(a: _P, b: _P):
         return 4 + ns, "gov"
     if a.hid & b.hid and (ns >= 0.7 or not has_names):
         return 3 + ns, "hid"
-    if (a.phone & b.phone or a.email & b.email) and has_names and ns >= 0.85:
+    if a.email & b.email and (ns >= 0.7 or not has_names):
+        return 2.5 + ns, "contact"
+    if a.phone & b.phone and (ns >= 0.7 or not has_names):
         return 2 + ns, "contact"
     # name-based: needs two-token names on both sides plus corroboration
     ns2 = _best(a.names, b.names, min_tokens=2)

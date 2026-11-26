@@ -1,10 +1,10 @@
 {
-  "PATIENT_NAME": ["Patient Name", "Patient's Name", "Pt Name", "रोगी का नाम"],
-  "RELATIVE_NAME": ["Relative Name", "Pita/Pati ka Naam", "Father/Husband Name", "Relative's Name", "Guardian Name", "परिजन का नाम"],
-  "INSURANCE_ID": ["PMJAY ID", "Policy No", "Policy Number", "Insurance ID", "Insurance No"],
-  "ADDRESS": ["Address", "Pata", "Full Address", "Home Address", "Residential Address", "Patient Address", "पता"],
-  "AADHAAR": ["Aadhaar", "Aadhar No", "Aadhaar_No", "Aadhar Number", "Aadhaar No", "Aadhaar Number", "आधार संख्या"],
+  "PATIENT_NAME": ["Patient Name", "Patient's Name", "Pt Name", "Naam", "रोगी का नाम", "मरीज़ का नाम"],
+  "RELATIVE_NAME": ["Relative Name", "Pita/Pati ka Naam", "Father/Husband Name", "Relative's Name", "Guardian Name", "Guardian's Name", "Father's Name", "Mother's Name", "Husband's Name", "Wife's Name", "Spouse Name", "परिजन का नाम", "पिता/पति का नाम", "अभिभावक का नाम"],
+  "INSURANCE_ID": ["PMJAY ID", "Policy No", "Policy Number", "Insurance ID", "Insurance No", "Insurance Number", "Claim ID", "Claim No", "TPA ID", "RSBY ID", "CGHS No", "ECHS No", "बीमा संख्या"],
+  "ADDRESS": ["Address", "Pata", "Full Address", "Home Address", "Residential Address", "Patient Address", "Gram/Mohalla", "गाँव/मोहल्ला", "House No", "Makan No", "पता", "निवास", "ठिकाना"],
+  "AADHAAR": ["Aadhaar", "Aadhar No", "Aadhaar_No", "Aadhar Number", "Aadhaar No", "Aadhaar Number", "आधार संख्या", "आधार नं"],
   "ABHA_NUMBER": ["ABHA", "ABHA No", "ABHA Number", "आभा संख्या"],
-  "MRN": ["UHID", "MRN", "Medical Record Number", "Hospital Number"],
-  "PHONE": ["Mobile", "Mobile No.", "Contact#", "Phone Number", "मोबाइल नंबर"]
+  "MRN": ["UHID", "MRN", "Medical Record Number", "Hospital Number", "Registration No", "Reg No", "IPD No", "OPD No", "पंजीकरण सं"],
+  "PHONE": ["Mobile", "Mobile No.", "Contact#", "Phone Number", "Contact Number", "Phone No", "Mobile Number", "मोबाइल नंबर", "फोन नंबर", "संपर्क नंबर"]
 }

@@ -107,11 +107,13 @@ class PseudonymBook:
 
 # --------------------------------------------------------------------------- dates and ages
 def date_shift_days(patient_key: str) -> int:
-    """Per-patient shift in [-max, max-1], never 0. Same key -> same shift for every date."""
-    m = int(POLICY.get("date_shift_max_days", 180))
+    """Per-patient shift in [-max, -90] U [90, max], never small/0. Same key -> same shift."""
+    m = int(POLICY.get("date_shift_max_days", 730))
+    min_s = min(90, m // 2)
     d = hmac.new(secret(), b"shift|" + patient_key.encode("utf-8"), hashlib.sha256).digest()
-    v = int.from_bytes(d[:4], "big") % (2 * m) - m
-    return v if v != 0 else 1
+    span = max(1, m - min_s + 1)
+    mag = min_s + (int.from_bytes(d[:4], "big") % span)
+    return -mag if (d[4] & 1) else mag
 
 
 def shift_date(value: dt.date, patient_key: str) -> dt.date:
@@ -155,24 +157,29 @@ def _quasi(c: Clues):
 
 
 def rare_refs(items: list[tuple[str | None, Clues]]) -> set[RecordRef]:
-    """Records whose (age band, sex, location) combination covers fewer than min_group_size
-    KNOWN patients (k-anonymity on the quasi-identifier tuple).
-
-    Only distinct non-None patient keys count. Unlinked records (key None) may all be one person,
-    so they never add to a group's size: five unlinked visits of the same age band are NOT five
-    patients, and the whole group is flagged. This is deliberately conservative."""
+    """Records whose (age band, sex, location) combination or condition covers fewer than
+    min_group_size KNOWN patients (k-anonymity on quasi-identifiers and rare conditions)."""
     k = int(POLICY.get("min_group_size", 5))
     if k <= 1 or not int(POLICY.get("suppress_rare", 1)):
         return set()
     known: dict[tuple, set[str]] = defaultdict(set)
+    cond_known: dict[str, set[str]] = defaultdict(set)
     for key, c in items:
         q = _quasi(c)
         if q != (None, None, None):
             known[q]  # make sure the group exists even when it has no known patient
             if key:
                 known[q].add(key)
+        for cond in c.conditions:
+            cond_known[cond]
+            if key:
+                cond_known[cond].add(key)
     rare = {q for q, who in known.items() if len(who) < k}
-    return {c.ref for _, c in items if _quasi(c) in rare}
+    rare_conds = {cond for cond, who in cond_known.items() if len(who) < min(k, 3)}
+    return {
+        c.ref for _, c in items
+        if _quasi(c) in rare or any(cond in rare_conds for cond in c.conditions)
+    }
 
 
 # --------------------------------------------------------------------------- decisions
