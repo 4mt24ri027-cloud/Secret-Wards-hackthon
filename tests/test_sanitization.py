@@ -14,3 +14,14 @@ class HospitalIdentifierTests(unittest.TestCase):
                     result = process_csv(source, ",", "sample.csv", [])
                 link.assert_called_once_with("00123,650 mg")
                 self.assertEqual(list(read_rows(result)), [[header, "Dose"], ["[MRN]", "650 mg"]])
+
+    def test_identity_columns_redact_partial_values_and_keep_clinical_cells(self):
+        for delimiter in (",", "\t"):
+            with self.subTest(delimiter=delimiter):
+                headers = ["Aadhaar No", "ABHA No", "Dose", "Lab"]
+                values = ["xxxx-1234", "12-3456-7890-1234", "650 mg", "245 mg/dL"]
+                source = delimiter.join(headers) + "\n" + delimiter.join(values)
+                result = process_csv(source, delimiter, "sample", [])
+                self.assertEqual(list(read_rows(result, delimiter)), [
+                    headers, ["[AADHAAR]", "[ABHA_NUMBER]", "650 mg", "245 mg/dL"]
+                ])
