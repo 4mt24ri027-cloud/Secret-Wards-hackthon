@@ -135,6 +135,9 @@ def clean_value(v, parent_key=""):
             if parent_key == "patient" and field == "name" and isinstance(value, str) and value.strip():
                 cleaned[clean_text(key)] = "[PATIENT_NAME]"
                 Stats.identifiers += 1
+            elif field == "patient_ref" and isinstance(value, str) and value.strip():
+                cleaned[clean_text(key)] = "[PATIENT_REF]"
+                Stats.identifiers += 1
             else:
                 cleaned[clean_text(key)] = clean_value(value, field)
         return cleaned

@@ -45,3 +45,12 @@ class JsonPatientNameTests(unittest.TestCase):
         }
         cleaned = json.loads(process_json(json.dumps(report), "lab/example.json", []))
         self.assertEqual(cleaned, {**report, "patient": {"name": "[PATIENT_NAME]"}})
+
+    def test_visit_reference_redacted_and_clinical_values_preserved(self):
+        import json
+        from main import process_json
+
+        visit = {"patient_ref": "HOSP-01234", "visit_id": "visit-1", "bp": "120/80"}
+        source = json.dumps({"visits": [visit]})
+        cleaned = json.loads(process_json(source, "opd/example.json", []))
+        self.assertEqual(cleaned["visits"], [{**visit, "patient_ref": "[PATIENT_REF]"}])
