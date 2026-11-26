@@ -1,5 +1,6 @@
 {
   "PATIENT_NAME": ["Patient Name", "Patient's Name", "Pt Name", "रोगी का नाम"],
   "RELATIVE_NAME": ["Relative Name", "Relative's Name", "Guardian Name", "परिजन का नाम"],
+  "MRN": ["UHID", "MRN", "Medical Record Number", "Hospital Number"],
   "PHONE": ["Mobile", "Mobile No.", "Contact#", "Phone Number", "मोबाइल नंबर"]
 }
