@@ -395,10 +395,20 @@ def process_json(text: str, rel: str, records: list, ids=None) -> str:
     return json.dumps(clean_value(data), ensure_ascii=False, indent=2) + "\n"
 
 
+NOTE_ADDRESS = re.compile(r"(?im)^([ \t]*(?:address|पता)[ \t]*:[ \t]*)[^\r\n]+")
+NOTE_DOB = re.compile(
+    r"(?im)^([ \t]*(?:DOB|date of birth|जन्म तिथि)[ \t]*:[ \t]*)"
+    r"\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b"
+)
+
+
 def process_text(text: str, rel: str, records: list, ids=None) -> str:
     pid = (ids or {}).get(RecordRef(rel, "doc"))
     records.append({"file": f"sanitized/{rel}", "loc": "doc", "patient": pid})
     Stats.records += 1
+    text, addresses = NOTE_ADDRESS.subn(r"\g<1>[ADDRESS]", text)
+    text, births = NOTE_DOB.subn(r"\g<1>[DOB]", text)
+    Stats.generalized += int(bool(addresses or births))
     return (f"Patient: {pid}\n" if pid else "") + clean_text(text)
 
 

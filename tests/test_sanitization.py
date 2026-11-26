@@ -170,3 +170,12 @@ class PatientDemographicsTests(unittest.TestCase):
         self.assertEqual(cleaned["address"][0], {"city": "Example District", "district": "Example District",
                                                 "postalCode": "[POSTCODE]"})
         self.assertEqual(clean_value({"date": "2025-05-17"}), {"date": "2025-05-17"})
+
+class DischargeDemographicsTests(unittest.TestCase):
+    def test_english_and_hindi_labels_preserve_clinical_lines(self):
+        from main import process_text
+
+        for label in ["Address", "पता"]:
+            note = f"{label}: Example Village - 123456\r\nDOB: 17/05/1986\r\nAdmission: 12/04/2025\nDose: 650 mg"
+            expected = f"{label}: [ADDRESS]\r\nDOB: [DOB]\r\nAdmission: 12/04/2025\nDose: 650 mg"
+            self.assertEqual(process_text(note, "sample.txt", []), expected)
