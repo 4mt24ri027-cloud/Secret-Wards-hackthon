@@ -1,8 +1,9 @@
 {
   "PATIENT_NAME": ["Patient Name", "Patient's Name", "Pt Name", "रोगी का नाम"],
-  "RELATIVE_NAME": ["Relative Name", "Relative's Name", "Guardian Name", "परिजन का नाम"],
-  "ADDRESS": ["Address", "Home Address", "Residential Address", "Patient Address", "पता"],
-  "AADHAAR": ["Aadhaar", "Aadhaar No", "Aadhaar Number", "आधार संख्या"],
+  "RELATIVE_NAME": ["Relative Name", "Pita/Pati ka Naam", "Father/Husband Name", "Relative's Name", "Guardian Name", "परिजन का नाम"],
+  "INSURANCE_ID": ["PMJAY ID", "Policy No", "Policy Number", "Insurance ID", "Insurance No"],
+  "ADDRESS": ["Address", "Pata", "Full Address", "Home Address", "Residential Address", "Patient Address", "पता"],
+  "AADHAAR": ["Aadhaar", "Aadhar No", "Aadhaar_No", "Aadhar Number", "Aadhaar No", "Aadhaar Number", "आधार संख्या"],
   "ABHA_NUMBER": ["ABHA", "ABHA No", "ABHA Number", "आभा संख्या"],
   "MRN": ["UHID", "MRN", "Medical Record Number", "Hospital Number"],
   "PHONE": ["Mobile", "Mobile No.", "Contact#", "Phone Number", "मोबाइल नंबर"]

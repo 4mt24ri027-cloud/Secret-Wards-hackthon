@@ -6,7 +6,6 @@ the file. Nothing here prints or logs.
 from __future__ import annotations
 
 import base64
-import xml.etree.ElementTree as ET
 import hashlib
 import hmac
 import re
@@ -16,6 +15,7 @@ from .contracts import Decision, ParsedFile, RecordRef, SanitizeResult
 from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DOB, PATTERNS,
                      RELATIVE_LABEL, VISIT_BP_SUBJECT, classify_columns, classify_header)
 from .formats import decode, dump_json, json_units, load_json, read_rows, write_rows
+from .names import Names, Redactor, declared_names, full_names
 from .privacy import age_band, secret
 
 Decisions = dict[RecordRef, Decision]
@@ -26,6 +26,7 @@ class _Counter:
 
 
 _count = _Counter()
+_known = Redactor({})  # names declared in structured fields; replaced for each file
 
 
 def _patient_id(decisions: Decisions, rel: str, loc: str) -> str | None:
@@ -36,7 +37,9 @@ def _patient_id(decisions: Decisions, rel: str, loc: str) -> str | None:
 # --------------------------------------------------------------------------- text and values
 
 def clean_text(text: str) -> str:
-    """Replace detected identifiers with typed placeholders. TODO(team): much more than regex."""
+    """Replace known names and detected identifiers with typed placeholders."""
+    text, count = _known.apply(text)
+    _count.identifiers += count
     text, count = RELATIVE_LABEL.subn(r"\g<label>[RELATIVE_NAME]", text)
     _count.identifiers += count
     for kind, rx in PATTERNS:
@@ -59,6 +62,14 @@ def clean_person_name(value, placeholder):
         }
     return value
 
+def _unique(key: str, taken: dict) -> str:
+    """Two redacted keys can look alike; number them so that no value is overwritten."""
+    candidate, number = key, 1
+    while candidate in taken:
+        number += 1
+        candidate = f"{key}_{number}"
+    return candidate
+
 def clean_value(v, parent_key=""):
     if isinstance(v, str):
         return clean_text(v)
@@ -69,6 +80,7 @@ def clean_value(v, parent_key=""):
         cleaned = {}
         for key, value in v.items():
             field = key.strip().casefold()
+            new_key = _unique(clean_text(key), cleaned)
             patient_context = parent_key in {"patient", "patients"} or v.get("resourceType") == "Patient"
             if field == "birthdate" and v.get("resourceType") == "Patient" and isinstance(value, str):
                 # FHIR date permits year-only precision.
@@ -85,10 +97,10 @@ def clean_value(v, parent_key=""):
                     cleaned[key] = clean_text(v["district"]) if isinstance(v.get("district"), str) and v["district"] else "[LOCALITY]"
                 continue
             if classify_header(key) == "PATIENT_NAME" or (field == "name" and patient_context):
-                cleaned[clean_text(key)] = clean_person_name(value, "[PATIENT_NAME]")
+                cleaned[new_key] = clean_person_name(value, "[PATIENT_NAME]")
             elif (parent_key.strip("_").casefold() in {"export_meta", "metadata"}
                   and field in {"source_path", "sourcepath"} and isinstance(value, str) and value):
-                cleaned[clean_text(key)] = "[SOURCE_PATH]"
+                cleaned[new_key] = "[SOURCE_PATH]"
             elif field == "notes" and parent_key == "visits" and isinstance(value, str):
                 subject = VISIT_BP_SUBJECT.match(value)
                 if subject and subject.group().casefold() not in GENERIC_BP_SUBJECTS:
@@ -96,11 +108,11 @@ def clean_value(v, parent_key=""):
                     _count.identifiers += 1
                 cleaned[key] = clean_text(value)
             elif field == "name" and parent_key == "guardian":
-                cleaned[clean_text(key)] = clean_person_name(value, "[RELATIVE_NAME]")
+                cleaned[new_key] = clean_person_name(value, "[RELATIVE_NAME]")
             elif (field == "line" and parent_key == "address") or field == "address_note":
-                cleaned[clean_text(key)] = clean_person_name(value, "[ADDRESS]")
+                cleaned[new_key] = clean_person_name(value, "[ADDRESS]")
             elif parent_key == "raised_by" and field == "name" and isinstance(value, str) and value.strip():
-                cleaned[clean_text(key)] = "[CONTACT_NAME]"
+                cleaned[new_key] = "[CONTACT_NAME]"
                 _count.identifiers += 1
             elif field == "data" and str(v.get("contentType", "")).split(";")[0].strip().lower() == "text/plain":
                 if not isinstance(value, str):
@@ -110,11 +122,17 @@ def clean_value(v, parent_key=""):
                 if decoded is None:
                     raise ValueError("undecodable_attachment")
                 cleaned[key] = base64.b64encode(clean_text(decoded).encode("utf-8")).decode("ascii")
+            elif (classify_header(key) in {"AADHAAR", "INSURANCE_ID"}
+                  and isinstance(value, (str, int)) and str(value).strip()):
+                cleaned[new_key] = f"[{classify_header(key)}]"
+                _count.identifiers += 1
+            elif field == "valuestring" and "name" in str(v.get("url", "")).casefold():
+                cleaned[new_key] = clean_person_name(value, "[RELATIVE_NAME]")
             elif field == "patient_ref" and isinstance(value, str) and value.strip():
-                cleaned[clean_text(key)] = "[PATIENT_REF]"
+                cleaned[new_key] = "[PATIENT_REF]"
                 _count.identifiers += 1
             else:
-                cleaned[clean_text(key)] = clean_value(value, field)
+                cleaned[new_key] = clean_value(value, field)
         return cleaned
     return v  # numbers, booleans, null keep their type
 
@@ -129,6 +147,17 @@ def clean_filename(rel: str) -> str | None:
         return None
     token = hmac.new(secret(), b"filename|" + rel.encode("utf-8"), hashlib.sha256).hexdigest()[:20]
     return f"file_{token}{path.suffix}"
+
+def clean_header(cells: list[str]) -> list[str]:
+    """Headers can hold record numbers and names, e.g. one column per patient."""
+    cleaned: dict[str, None] = {}
+    for cell in cells:
+        text, count = re.subn(r"(\[MRN\][ \t]+)[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)*",
+                              r"\1[PATIENT_NAME]", clean_text(cell))
+        _count.identifiers += count
+        cleaned[_unique(text, cleaned) if text != cell else text] = None
+    # Unchanged duplicate headers must keep their column count.
+    return list(cleaned) if len(cleaned) == len(cells) else [clean_text(cell) for cell in cells]
 
 def redact_declared_names(text):
     names = {match["name"] for match in HINDI_NAME_LINE.finditer(text)}
@@ -169,7 +198,8 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
     labels = [name.strip().casefold() for name in header]
     district = next((i for i, name in enumerate(labels) if name in {"district", "jila", "जिला"}), None)
     add_reference = any(ref.file == rel and d.patient_id for ref, d in decisions.items()) and "PATIENT_NAME" not in field_types
-    cleaned_rows = [header + ["patient_pseudonym"] if add_reference else header]
+    safe_header = clean_header(header)
+    cleaned_rows = [safe_header + ["patient_pseudonym"] if add_reference else safe_header]
     for i, row in enumerate(rows):
         pid = _patient_id(decisions, rel, f"row:{i}")
         cleaned, redacted = sanitize_row(row, field_types, pid)
@@ -200,68 +230,8 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
         records.append({"loc": f"row:{i}", "patient": pid})
     return write_rows(cleaned_rows, delimiter), records, generalized_rows
 
-def redact_bundle_mentions(bundle):
-    """Use declared patient names to clean human-readable fields in this bundle."""
-    names = set()
-    for entry in bundle.get("entry") or []:
-        resource = entry.get("resource") if isinstance(entry, dict) else None
-        if not isinstance(resource, dict) or resource.get("resourceType") != "Patient":
-            continue
-        for name in resource.get("name") or []:
-            if isinstance(name, dict):
-                full = name.get("text")
-                if isinstance(full, str) and full.strip():
-                    names.add(full.strip())
-                given = name.get("given", [])
-                family = name.get("family")
-                if isinstance(given, list) and all(isinstance(n, str) for n in given) and isinstance(family, str) and given:
-                    names.add(" ".join([*given, family]).strip())
-    if not names:
-        return
-    alternatives = "|".join(re.escape(n) for n in sorted(names, key=lambda n: (-len(n), n)) if n)
-    if not alternatives:
-        return
-    pattern = re.compile(r"(?<!\w)(?:" + alternatives + r")(?!\w)", re.I)
-
-    def replace(text):
-        cleaned, count = pattern.subn("[PATIENT_NAME]", text)
-        _count.identifiers += count
-        return cleaned
-
-    def visit(node):
-        if isinstance(node, list):
-            for item in node:
-                visit(item)
-        elif isinstance(node, dict):
-            for field, value in node.items():
-                if field == "display" and isinstance(value, str):
-                    node[field] = replace(value)
-                elif field == "div" and isinstance(value, str) and pattern.search(value):
-                    try:
-                        root = ET.fromstring(value)
-                    except ET.ParseError as exc:
-                        raise ValueError("invalid_narrative") from exc
-                    for element in root.iter():
-                        if element.text:
-                            element.text = replace(element.text)
-                        if element.tail:
-                            element.tail = replace(element.tail)
-                    node[field] = ET.tostring(root, encoding="unicode")
-                elif field == "data" and node.get("contentType") == "text/plain" and isinstance(value, str):
-                    raw = base64.b64decode("".join(value.split()), validate=True)
-                    decoded = decode(raw)
-                    if decoded is None:
-                        raise ValueError("undecodable_attachment")
-                    node[field] = base64.b64encode(replace(decoded).encode("utf8")).decode("ascii")
-                else:
-                    visit(value)
-    visit(bundle)
-
-
 def _clean_json(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dict], int]:
     data = load_json(parsed.text)
-    if isinstance(data, dict) and data.get("resourceType") == "Bundle":
-        redact_bundle_mentions(data)
     records = []
     for loc, unit in json_units(data):
         pid = _patient_id(decisions, parsed.rel, loc)
@@ -284,8 +254,11 @@ def _clean_document(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list
 _CLEANERS = {"table": _clean_table, "json": _clean_json, "text": _clean_document}
 
 
-def sanitize_file(parsed: ParsedFile, decisions: Decisions) -> SanitizeResult:
+def sanitize_file(parsed: ParsedFile, decisions: Decisions,
+                  release_names: Names | None = None) -> SanitizeResult:
     """Clean one file. Counts cover only files that were cleaned successfully."""
+    global _known
+    _known = Redactor({**full_names(release_names or {}), **declared_names(parsed)})
     before = _count.identifiers
     new_name = clean_filename(parsed.rel)
     text, records, generalized = _CLEANERS[parsed.kind](parsed, decisions)

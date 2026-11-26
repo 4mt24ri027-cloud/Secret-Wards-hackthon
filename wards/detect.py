@@ -57,7 +57,34 @@ RELATIVE_LABEL = re.compile(
     rf"(?P<label>(?<![\w/])(?i:[swd]/o|attendant:|पिता का नाम:|पति का नाम:|माता का नाम:)[ \t]+)"
     rf"{RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
 )
+# Words that can precede an honorific without being a person's name.
+_NOT_BEFORE_HONORIFIC = (r"(?!(?:Dr|Doctor|Sir|Madam|Sister|Nurse|Haan|Nahi|Patient|Mareez|Mata|Pita"
+                         r"|Ward|Bed|Aap|Ok|Okay|Ji)\b)")
+_NOT_DOCTOR = r"(?<!Dr )(?<!Dr\. )"
+
 PATTERNS = [
+    # "Kamal Bhaiya", "Mohan Papa": a name followed by a kinship word is a relative.
+    ("RELATIVE_NAME", re.compile(
+        rf"\b{_NOT_DOCTOR}{_NOT_BEFORE_HONORIFIC}{PERSON_WORD}"
+        r"(?=[ \t]+(?i:bhaiya|chachu|chacha|mama|mausi|papa|mummy)\b)"
+    )),
+    # "Asha ji", "Shahid sahab": a name followed by an honorific is the person spoken about.
+    ("PATIENT_NAME", re.compile(
+        rf"\b{_NOT_DOCTOR}{_NOT_BEFORE_HONORIFIC}{PERSON_WORD}"
+        rf"(?:[ \t]+{_NOT_BEFORE_HONORIFIC}{PERSON_WORD}){{0,2}}?"
+        r"(?=[ \t]+(?i:ji|sahab|behenji|bhenji|didi|babu|amma|bhai)\b)"
+    )),
+    # "Mohd. Shahid" / "Md. Arif".
+    ("PATIENT_NAME", re.compile(rf"\b{_NOT_DOCTOR}(?:Mohd|Md)\.?[ \t]+{PERSON_WORD}")),
+    # Nursing note entry: "14:00 - Name Surname - K/C/O ...".
+    ("PATIENT_NAME", re.compile(
+        rf"(?<=\d\d:\d\d - ){PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{0,3}}(?=[ \t]+-[ \t]+K/C/O\b)"
+    )),
+    # Address fragments that land in the wrong column of broken exports.
+    ("HOUSE", re.compile(r"(?i)\b(?:H\.[ \t]?No\.?|House[ \t]No\.?|Makan[ \t]No\.?)[ \t]*\d+[A-Z]?\b")),
+    ("LOCALITY", re.compile(r"\b(?i:mohalla)[ \t]+[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){0,2}")),
+    ("INSURANCE_ID", re.compile(r"\bPMJAY-[A-Z]{2}-\d{8,12}\b")),
+    ("PHONE", re.compile(r"(?<!\d)(?:\+?९१[\s-]?)?[६-९][०-९]{4}[\s-]?[०-९]{5}(?!\d)")),
     ("PATIENT_NAME", re.compile(
         rf"\b{PERSON_WORD}(?=[ \t]+(?i:bhai|amma|ji|didi|sahab|behenji|bhenji|babu)"
         r"[ \t]+ki[ \t]+condition\b)"
@@ -72,7 +99,7 @@ PATTERNS = [
     # Hospital record numbers in narrative text, including year/serial forms.
     ("MRN", re.compile(
         r"(?i)(?<![\w/-])(?:UHID|MRN|IPD|IP|ADM|JJH|SNJ|DHH)"
-        r"(?:[-/](?:IPD|\d{2,4}))?[-/]?\d{5,9}(?![\w/-])"
+        r"(?:[-/](?:IPD|\d{2,4})|20\d{2}(?=-))?[-/]?\d{5,9}(?![\w/-])"
     )),
     ("CONTACT_NAME", re.compile(rf"(?<=(?i:called by) ){PERSON_NAME}(?=[ \t]+[+\d])")),
     ("WITNESS_NAME", re.compile(rf"(?<=(?i:witnessed by) ){PERSON_NAME}(?=[,.;]|$)")),

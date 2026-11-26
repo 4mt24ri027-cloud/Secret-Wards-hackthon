@@ -20,12 +20,27 @@ from wards.contracts import Decision, RecordRef
 from wards.detect import collect_clues
 from wards.formats import read_file
 from wards.linkage import link
+from wards.names import Names, declared_names
 from wards.privacy import PseudonymBook, decide
 from wards.release import Stats, choose_rel, reason_of, safe_rel, write_release, write_sanitized
 from wards.sanitize import sanitize_file
 
 # Errors that quarantine one file instead of stopping the run.
 FILE_ERRORS = (ValueError, RecursionError, UnicodeError, csv.Error)
+
+
+def collect_names(paths: list[Path], inp: Path) -> Names:
+    """Every patient and relative name that a structured field declares, across all files."""
+    names: Names = {}
+    for path in paths:
+        try:
+            found = declared_names(read_file(path.relative_to(inp).as_posix(), path.read_bytes()))
+        except FILE_ERRORS:
+            continue
+        for name, kind in found.items():
+            if names.get(name) != "[PATIENT_NAME]":
+                names[name] = kind
+    return names
 
 
 def make_decisions(paths: list[Path], inp: Path, book: PseudonymBook) -> dict[RecordRef, Decision]:
@@ -42,7 +57,8 @@ def make_decisions(paths: list[Path], inp: Path, book: PseudonymBook) -> dict[Re
     return {c.ref: decide(keys.get(c.ref), c, book) for c in clues}
 
 
-def release_files(paths: list[Path], inp: Path, out: Path, decisions: dict[RecordRef, Decision]):
+def release_files(paths: list[Path], inp: Path, out: Path, decisions: dict[RecordRef, Decision],
+                  names: Names | None = None):
     """Pass 2: clean and write every file; never copy one that could not be processed."""
     files, records, taken = [], [], set()
     stats = Stats()
@@ -51,7 +67,7 @@ def release_files(paths: list[Path], inp: Path, out: Path, decisions: dict[Recor
         raw = path.read_bytes()
         entry = {"input_sha256": hashlib.sha256(raw).hexdigest()}
         try:
-            result = sanitize_file(read_file(rel, raw), decisions)
+            result = sanitize_file(read_file(rel, raw), decisions, names)
             output_rel = safe_rel(choose_rel(rel, result.new_name), taken)
             write_sanitized(out, output_rel, result.text)
         except FILE_ERRORS as exc:
@@ -80,7 +96,8 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = sorted(p for p in inp.rglob("*") if p.is_file())
     decisions = make_decisions(paths, inp, book)
-    files, records, stats = release_files(paths, inp, out, decisions)
+    names = collect_names(paths, inp)
+    files, records, stats = release_files(paths, inp, out, decisions, names)
     write_release(out, files, records, stats, time.monotonic() - t0)
 
     n_san = sum(entry["status"] == "sanitized" for entry in files)
