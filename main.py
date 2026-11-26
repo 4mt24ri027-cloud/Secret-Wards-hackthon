@@ -24,7 +24,7 @@ import csv
 import datetime as dt
 import hashlib
 import hmac
-import io
+from wards.formats import read_rows, write_rows
 import json
 import os
 import re
@@ -157,22 +157,20 @@ def decode(raw: bytes) -> str | None:
 
 
 def process_csv(text: str, delimiter: str, rel: str, records: list) -> str:
-    rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=delimiter))
-    if not rows:
+    rows = read_rows(text, delimiter)
+    header = next(rows, None)
+    if header is None:
         return ""
-    header, body = rows[0], rows[1:]
-    buf = io.StringIO()
-    w = csv.writer(buf, delimiter=delimiter, lineterminator="\n")
-    w.writerow(header)  # TODO(team): rename a header only if it contains PII
-    for i, row in enumerate(body):
+    cleaned_rows = [header]
+    for i, row in enumerate(rows):
         key = link_records(delimiter.join(row))
         pid = pseudonym(key) if key else None
         # TODO(team): write pid into the row's patient column so it appears INSIDE the record
-        w.writerow([clean_text(c) for c in row])
+        cleaned_rows.append([clean_text(c) for c in row])
         records.append({"file": f"sanitized/{rel}", "loc": f"row:{i}", "patient": pid})
         Stats.records += 1
         Stats.linked += pid is not None
-    return buf.getvalue()
+    return write_rows(cleaned_rows, delimiter)
 
 
 def process_json(text: str, rel: str, records: list) -> str:
