@@ -122,6 +122,14 @@ def age_band(age: int) -> str:
     lo = (age // w) * w
     return f"{lo}-{lo + w - 1}"
 
+def age_label(age: int, widen: int = 1) -> str:
+    """Truthful band that contains `age`; very old ages are top-coded as '85+'."""
+    w = max(1, int(POLICY.get("age_band_years", 5))) * max(1, widen)
+    top = int(POLICY.get("age_top_code", 85))
+    if age >= top:
+        return f"{top}+"
+    lo = (age // w) * w
+    return f"{lo}-{min(lo + w - 1, top - 1)}"
 
 # --------------------------------------------------------------------------- suppression
 def _fallback_key(ref: RecordRef) -> str:
