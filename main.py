@@ -40,7 +40,7 @@ from wards.privacy import POLICY
 from wards.contracts import Clues, RecordRef
 from wards.linkage import link
 from wards.release import Stats as ReleaseStats
-from wards.release import reason_of, safe_rel, write_release, write_sanitized
+from wards.release import choose_rel, reason_of, safe_rel, write_release, write_sanitized
 
 SECRET = os.environ.get("RAKSHA_SECRET", "").encode()  # never print or write this
 
@@ -133,6 +133,17 @@ class Stats:
 
 
 MRN_PATTERN = next(rx for kind, rx in PATTERNS if kind == "MRN")
+
+
+def release_filename(rel: str) -> str:
+    path = Path(rel)
+    # Treat filename separators as boundaries for the existing identifier detectors.
+    stem = path.stem.replace("_", " ")
+    sensitive = re.search(r"(?i)^discharge[ -]+summary[ -]+\S", stem)
+    if not sensitive and not any(rx.search(stem) for kind, rx in PATTERNS if kind in {"MRN", "PHONE", "AADHAAR", "PAN", "EMAIL"}):
+        return rel
+    token = hmac.new(SECRET, b"filename|" + rel.encode("utf-8"), hashlib.sha256).hexdigest()[:20]
+    return choose_rel(rel, f"file_{token}{path.suffix}")
 
 
 def clean_text(text: str) -> str:
@@ -387,7 +398,7 @@ def main() -> int:
             text = decode(raw)
             if text is None:
                 raise ValueError("undecodable_text")
-            output_rel = safe_rel(rel, taken)
+            output_rel = safe_rel(release_filename(rel), taken)
             file_records = []
             if ext in (".csv", ".tsv"):
                 result = process_csv(text, "\t" if ext == ".tsv" else ",", rel, file_records, ids)
