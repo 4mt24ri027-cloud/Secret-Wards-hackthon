@@ -25,3 +25,10 @@ class HospitalIdentifierTests(unittest.TestCase):
                 self.assertEqual(list(read_rows(result, delimiter)), [
                     headers, ["[AADHAAR]", "[ABHA_NUMBER]", "650 mg", "245 mg/dL"]
                 ])
+
+    def test_quoted_home_address_is_redacted_as_one_cell(self):
+        source = 'Address,Dose\n"House 5, Example Road, Ward 2",650 mg\n'
+        result = process_csv(source, ",", "sample.csv", [])
+        self.assertEqual(list(read_rows(result)), [
+            ["Address", "Dose"], ["[ADDRESS]", "650 mg"]
+        ])
