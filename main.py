@@ -100,6 +100,12 @@ def age_band(age: int) -> str:
 #   * JSON keys, CSV headers, file names and base64 attachments can all hold PII.
 PERSON_WORD = r"[A-Z][^\W\d_]*(?:[-'’][^\W\d_]+)*"
 PERSON_NAME = rf"{PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{1,3}}"
+# Kinship labels identify a relative even when only a first name is given.
+RELATIVE_WORD = rf"(?:{PERSON_WORD}|[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*)"
+RELATIVE_LABEL = re.compile(
+    rf"(?P<label>(?<![\w/])(?i:[swd]/o|attendant:|पिता का नाम:|पति का नाम:|माता का नाम:)[ \t]+)"
+    rf"{RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
+)
 PATTERNS = [
     # Hospital record numbers in narrative text, including year/serial forms.
     ("MRN", re.compile(
@@ -132,6 +138,8 @@ class Stats:
 
 def clean_text(text: str) -> str:
     """Replace detected identifiers with typed placeholders. TODO(team): much more than regex."""
+    text, count = RELATIVE_LABEL.subn(r"\g<label>[RELATIVE_NAME]", text)
+    Stats.identifiers += count
     for kind, rx in PATTERNS:
         text, n = rx.subn(f"[{kind}]" if kind != "NAME" else " [NAME]", text)
         Stats.identifiers += n
@@ -168,7 +176,7 @@ def clean_value(v, parent_key=""):
                 cleaned[clean_text(key)] = clean_person_name(value, "[PATIENT_NAME]")
             elif field == "name" and parent_key == "guardian":
                 cleaned[clean_text(key)] = clean_person_name(value, "[RELATIVE_NAME]")
-            elif field == "line" and parent_key == "address":
+            elif (field == "line" and parent_key == "address") or field == "address_note":
                 cleaned[clean_text(key)] = clean_person_name(value, "[ADDRESS]")
             elif parent_key == "raised_by" and field == "name" and isinstance(value, str) and value.strip():
                 cleaned[clean_text(key)] = "[CONTACT_NAME]"

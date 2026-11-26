@@ -102,3 +102,17 @@ class StructuredRegistrationTests(unittest.TestCase):
         self.assertEqual(patient["address"], {"line": "[ADDRESS]", "district": "Example District"})
         resource = {"resourceType": "Patient", "name": [{"given": ["Tara"], "use": "official"}]}
         self.assertEqual(clean_value(resource)["name"], [{"given": ["[PATIENT_NAME]"], "use": "official"}])
+
+class RelativeLabelTests(unittest.TestCase):
+    def test_relative_names_in_notes(self):
+        from main import clean_text
+
+        for label, name in [("S/o", "Aman Dev"), ("W/o", "Nila"), ("पिता का नाम:", "अजय निषाद")]:
+            self.assertEqual(clean_text(f"{label} {name}, BP 120/80"),
+                             f"{label} [RELATIVE_NAME], BP 120/80")
+
+    def test_clinical_complaints(self):
+        from main import clean_text
+
+        note = "C/O Fever. K/C/O diabetes. Dr. Example advised review."
+        self.assertEqual(clean_text(note), note)
