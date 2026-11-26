@@ -14,6 +14,7 @@ refuses to hand out IDs if the secret changes, so a stale ID can never leak acro
 """
 from __future__ import annotations
 
+
 import datetime as dt
 import hashlib
 import hmac
@@ -143,8 +144,12 @@ def _quasi(c: Clues):
     if c.age is not None and c.age >= 0:
         band = c.age // w
     elif c.dob and len(c.dob) >= 4 and c.dob[:4].isdigit():
-        band = int(c.dob[:4]) // w          # birth-year band stands in for age
+        # a birth year is NOT an age: convert it, otherwise it lands in a different
+        # numeric range than ages and the same people split into two groups
+        band = (dt.date.today().year - int(c.dob[:4])) // w
     loc = c.locations[-1].strip().casefold() if c.locations else None
+    if band is None and not loc:
+        return (None, None, None)   # sex alone is not a quasi-identifier
     return (band, c.sex, loc or None)
 
 
