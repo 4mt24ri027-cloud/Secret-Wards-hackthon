@@ -10,8 +10,8 @@ Needs RAKSHA_SECRET. Standard library only, Python 3.10+. Prints counts only.
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
+import os
 import sys
 import time
 from pathlib import Path
@@ -22,11 +22,11 @@ from wards.formats import read_file
 from wards.linkage import link
 from wards.names import Names, declared_names
 from wards.privacy import PseudonymBook, decide, rare_refs
-from wards.release import Stats, choose_rel, reason_of, safe_rel, write_release, write_sanitized
+from wards.release import READ_ERRORS, Stats, choose_rel, reason_of, safe_rel, write_release, write_sanitized
 from wards.sanitize import sanitize_file
 
 # Errors that quarantine one file instead of stopping the run.
-FILE_ERRORS = (ValueError, RecursionError, UnicodeError, csv.Error)
+FILE_ERRORS = READ_ERRORS
 
 
 def collect_names(paths: list[Path], inp: Path) -> Names:
@@ -94,7 +94,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--output", required=True)
     a = ap.parse_args(argv)
     t0 = time.monotonic()
-    inp, out = Path(a.input), Path(a.output)
+    def runner_path(value, env_key):
+        # The kit uses POSIX shell quoting even when launched through Windows cmd.
+        supplied = os.environ.get(env_key)
+        if os.name == "nt" and supplied and value == "'" + supplied + "'":
+            return Path(supplied)
+        return Path(value)
+
+    inp, out = runner_path(a.input, "RAKSHA_INPUT"), runner_path(a.output, "RAKSHA_OUTPUT")
+    if not inp.is_dir() or inp.resolve() in (out.resolve(), *out.resolve().parents):
+        ap.error("use an existing input directory and a separate output directory")
+    if out.exists() and any(out.iterdir()):
+        ap.error("choose an empty output directory to prevent stale release files")
     sys.setrecursionlimit(5000)
     book = PseudonymBook()  # fails here, before writing anything, if RAKSHA_SECRET is missing
     (out / "sanitized").mkdir(parents=True, exist_ok=True)

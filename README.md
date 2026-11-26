@@ -1,37 +1,49 @@
-# Starter skeleton
+# Secret Wards
 
-Copy this folder's contents to the root of **your own** repository and build from there.
+Team **Never Give Up** · Anish R and Prajnesh · Yugaantar DevForge Track 3
 
-```bash
-RAKSHA_SECRET=practice python3 main.py --input ../dev/input --output ../my_output
+This offline Python pipeline turns multilingual synthetic hospital exports into a research release. It uses names declared in structured records to find repeated mentions in clinical text, resolves records across hospitals, and applies release-specific pseudonyms and date shifts. It uses the Python standard library, CPU only. There are no trained models or runtime downloads.
+
+## Running the submission
+
+Use Python 3.10 or later. Run setup once with `python -m pip install -r requirements.txt`. The evaluator reads the setup and run commands from `raksha.toml`. Provide a fresh empty output directory outside the input tree. On PowerShell, this example uses the public practice key. The evaluator supplies its own private key.
+
+```powershell
+$env:RAKSHA_SECRET = "practice"
+python main.py --input ../Secret-Wards-ToolKit/dev/input --output out
+python ../Secret-Wards-ToolKit/validate_output.py --input ../Secret-Wards-ToolKit/dev/input --output out
+python ../Secret-Wards-ToolKit/check_dev.py --output out
+python ../Secret-Wards-ToolKit/check_submission.py --repo . --run
 ```
 
-## What it already does right
+On Linux, set the variable with `export RAKSHA_SECRET=practice`. For development tests install pytest and run `python -m pytest -q`. Keep practice truth and the toolkit outside the submission. On Windows use a toolkit checkout that preserves Git line endings so the input byte hashes agree with the answer key.
 
-| ✅ | Done for you |
-|---|---|
-| reads every file in a fixed order | deterministic output |
-| decodes UTF-8, UTF-8-BOM, UTF-16 and cp1252 | writes UTF-8 |
-| keeps CSV as CSV and JSON as JSON | same delimiter, header and structure |
-| quarantines PDF, images, XML, empty and broken JSON files | never copies them raw |
-| writes `report.json` | SHA-256 per file, honest counts, timing, memory |
-| writes `records.jsonl` | correct `row:N`, `/json/pointer` and `doc` locators |
-| `pseudonym()` | keyed HMAC fake IDs (`PSN-XXXXXX`) from `RAKSHA_SECRET` |
-| `date_shift_days()`, `shift_date()`, `age_band()` | per-patient date shifting and age bands |
-| prints only counts | stdout, stderr and logs are scanned for PII |
+## Architecture
 
-## What it does NOT do (that's the challenge)
+```text
+CSV / TSV / JSON / FHIR / notes
+              |
+      decode and identify records
+              |
+      collect identity clues and declared names
+              |
+      cluster records and assign privacy decisions
+              |
+      redact, shift, generalize and serialize
+              |
+      sanitized/ + records.jsonl + report.json
+```
 
-Search `main.py` for `TODO(team)`:
+The reader handles UTF-8, BOM-marked UTF-16 and legacy cp1252 exports. Detection uses column aliases, JSON context, Latin and Devanagari names, and Hinglish relationship and honorific patterns. Dates and numbers are interpreted in context to protect clinical measurements. The sanitizer also checks export paths, headers, keys, FHIR narratives and supported text attachments.
 
-1. real **detection**: column awareness, Hindi/Hinglish names, honorifics, relatives, the meaning traps;
-2. **hidden places**: file names, headers, JSON keys, metadata, base64 attachments;
-3. **linking** patients across files and scripts (`link_records` returns `None` for now);
-4. **quasi-identifiers**: date shifting, age bands, location generalisation, rare-value suppression;
-5. writing the fake ID **inside** each cleaned record;
-6. keeping FHIR a valid R4 Bundle.
+Linkage gathers evidence before redaction. Government identifiers, hospital identifiers and corroborated names or contact details produce candidate matches. Conflicts in demographics and government identifiers constrain merges. Ambiguous records can remain unlinked. The privacy layer derives keyed pseudonyms, applies consistent date offsets to supported dates, converts ages to bands and coarsens geography. Rare observed combinations trigger wider bands and additional suppression. Policy settings live in `config/policy.yaml`.
 
-As shipped it scores about **8 / 100** on the practice data with the official evaluator.
-Run `python3 ../check_dev.py --output ../my_output` after each change.
+## Security and deployment
 
-`config/policy.yaml` holds your privacy settings (age band width, date shift range, minimum group size).
+Supply the release secret through the environment from a secret manager. Restrict access to the process, input, release, swap and crash dumps. Deploy the read-only raw input and any swap on encrypted storage with volume keys managed separately. Volume encryption is an operator control. The executable reads the supplied input and keeps raw clues, linkage state and the name index in memory. It writes no raw intermediate database. Quarantine records a reason code and input digest without copying unprocessed payloads. Console output contains aggregate counts. Treat the resulting pseudonymized release as sensitive.
+
+## Evidence and limitations
+
+On the 200-file organizer practice set the checker found 0 of 3,230 personal-data items and 0 of 4 canaries in the release. It preserved 4,763 of 4,855 utility items (98.1%). The 92 missing items were district names. Linkage scored precision 1.00, recall 0.74 and F0.5 0.94. The run exported 195 files, quarantined five and assigned pseudonyms to 719 of 823 records. A separate two-row synthetic fixture with a new name and an alternate header preserved both doses, one patient pseudonym and the nine-day interval across shifted dates.
+
+Zero detected practice leaks do not establish anonymity. A released registration table still had two singleton groups across nine age-band, sex and district combinations for 27 linked patients. The official attacks may use additional attributes. Unfamiliar name forms, nested schemas, unsupported encodings and ambiguous dates remain risks. Hidden-set scores and operator storage encryption require independent verification.

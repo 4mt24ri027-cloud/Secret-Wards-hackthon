@@ -119,7 +119,7 @@ PATTERNS = [
 
 MRN_PATTERN = next(rx for kind, rx in PATTERNS if kind == "MRN")
 
-NOTE_ADDRESS = re.compile(r"(?im)^([ \t]*(?:address|पता|village|ग्राम|गाँव)[ \t]*:[ \t]*)[^\r\n]+")
+NOTE_ADDRESS = re.compile(r"(?im)^([ \t]*(?:address(?:[ \t]*\((?:attendant|guardian|relative)\))?|पता|village|ग्राम|गाँव)[ \t]*:[ \t]*)[^\r\n]+")
 NOTE_DOB = re.compile(
     r"(?im)^([ \t]*(?:DOB|date of birth|जन्म तिथि)[ \t]*:[ \t]*)"
     r"\d{1,4}[-/.]\d{1,2}[-/.]\d{2,4}\b"

@@ -206,3 +206,6 @@ trial 3
         
         Next: fix the biggest leak rows first, keep the medical values, then link patients.
         Also run: python3 validate_output.py --input dev/input --output my_output
+## Final submission check
+
+Team Never Give Up (Anish R and Prajnesh). On the hash-verified practice inputs, the pipeline released 195 of 200 files, quarantined five and assigned pseudonyms to 719 of 823 records. The checker found 0 of 3,230 direct personal-data items and 0 of 4 canaries. Utility preservation was 4,763 of 4,855 (98.1%); all 92 omitted items were district names. Linkage precision was 1.00, recall 0.74 and F0.5 0.94. The official three-run repository checker printed READY TO SUBMIT. These are practice results. The hidden attack score is unknown.
