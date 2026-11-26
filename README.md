@@ -1,14 +1,40 @@
 # Secret Wards
 
-Team **Never Give Up** · Anish R and Prajnesh · Yugaantar DevForge Track 3
+**Team Never Give Up · Anish R and Prajnesh · Yugaantar DevForge, Track 3**
 
-This offline Python pipeline turns multilingual synthetic hospital exports into a research release. It uses names declared in structured records to find repeated mentions in clinical text, resolves records across hospitals, and applies release-specific pseudonyms and date shifts. It uses the Python standard library, CPU only. There are no trained models or runtime downloads.
+Secret Wards helps hospitals prepare records for research. A researcher may need to know that someone received a medicine twice, nine days apart. The person's name, phone number and home address could give away who they are. Our program makes a cleaned copy of the records so researchers can study the treatment while fewer personal details travel with it.
 
-## Running the submission
+## How it works
 
-Use Python 3.10 or later. Run setup once with `python -m pip install -r requirements.txt`. The evaluator reads the setup and run commands from `raksha.toml`. Provide a fresh empty output directory outside the input tree. On PowerShell, this example uses the public practice key. The evaluator supplies its own private key.
+```text
+Hospital files → Find personal details → Match visits → Clean the records
+                                                              ↓
+                               Cleaned files + list of matches + report
+```
+
+1. **Read the files.** The program opens tables, hospital data files (JSON and FHIR) and written notes. It looks for names in English, Hindi and Hinglish, including in file names and supported text attachments. If a form names a patient and a doctor mentions that person later in a note, the program can use the form to find the repeated name.
+2. **Match visits before removing names.** A hospital number or several details that agree can help connect two records. Two people may share a name or phone. If the evidence is weak, the program can leave the records separate.
+3. **Give each matched patient a code.** A secret key helps generate a code that stands in for the patient's name. The same patient gets the same code within a release. Changing the secret changes the codes. The program can move a patient's dates together so a nine-day gap stays nine days. It can also replace an exact age with an age range and remove a district when too few patients share the same details.
+4. **Write the results.** The folder `sanitized/` holds the cleaned files. The file `records.jsonl` lists the patient code for each record when a match is available. The file `report.json` counts what was processed and explains why a file was set aside. The original files stay in place.
+
+## What happened in practice
+
+The organizers supplied 200 files with made-up patient records. Secret Wards released 195 and set aside five. The checker found **0 of the 3,230 known personal details** and **0 of four planted test identities** in the release. It found **4,763 of the 4,855 details marked useful for research (98.1%)**. All 92 omitted details were district names, so researchers lose some ability to compare places.
+
+The program assigned codes to 719 of 823 records. On the practice check, its matches had precision 1.00 and recall 0.74. In plain language, the checker reported no incorrect patient merges, but the program missed about a quarter of the expected links. Its combined matching score (F0.5) was 0.94.
+
+## What still needs care
+
+Someone who already knows a patient's age range, sex and district may still recognize them. In one table of 27 linked patients, two people were each alone in their group when we compared those three details. Unfamiliar names, dates and file layouts can also cause mistakes. The official score on unseen records is unknown.
+
+Secret Wards runs offline on an ordinary computer using Python. It uses no trained models. Working notes about patient identities stay in memory, and the program prints counts. Whoever runs it must protect the original files and the computer's temporary memory storage with disk encryption, keep the keys separately and limit who can open the cleaned files.
+
+## How to try it
+
+Install Python 3.10 or later and place the organizers' `Secret-Wards-ToolKit` folder beside this repository. Open PowerShell in this repository and run the following commands. Use a new, empty output folder each time. The word `practice` is a public key for this example. The judges supply a private key for their run.
 
 ```powershell
+python -m pip install -r requirements.txt
 $env:RAKSHA_SECRET = "practice"
 python main.py --input ../Secret-Wards-ToolKit/dev/input --output out
 python ../Secret-Wards-ToolKit/validate_output.py --input ../Secret-Wards-ToolKit/dev/input --output out
@@ -16,34 +42,4 @@ python ../Secret-Wards-ToolKit/check_dev.py --output out
 python ../Secret-Wards-ToolKit/check_submission.py --repo . --run
 ```
 
-On Linux, set the variable with `export RAKSHA_SECRET=practice`. For development tests install pytest and run `python -m pytest -q`. Keep practice truth and the toolkit outside the submission. On Windows use a toolkit checkout that preserves Git line endings so the input byte hashes agree with the answer key.
-
-## Architecture
-
-```text
-CSV / TSV / JSON / FHIR / notes
-              |
-      decode and identify records
-              |
-      collect identity clues and declared names
-              |
-      cluster records and assign privacy decisions
-              |
-      redact, shift, generalize and serialize
-              |
-      sanitized/ + records.jsonl + report.json
-```
-
-The reader handles UTF-8, BOM-marked UTF-16 and legacy cp1252 exports. Detection uses column aliases, JSON context, Latin and Devanagari names, and Hinglish relationship and honorific patterns. Dates and numbers are interpreted in context to protect clinical measurements. The sanitizer also checks export paths, headers, keys, FHIR narratives and supported text attachments.
-
-Linkage gathers evidence before redaction. Government identifiers, hospital identifiers and corroborated names or contact details produce candidate matches. Conflicts in demographics and government identifiers constrain merges. Ambiguous records can remain unlinked. The privacy layer derives keyed pseudonyms, applies consistent date offsets to supported dates, converts ages to bands and coarsens geography. Rare observed combinations trigger wider bands and additional suppression. Policy settings live in `config/policy.yaml`.
-
-## Security and deployment
-
-Supply the release secret through the environment from a secret manager. Restrict access to the process, input, release, swap and crash dumps. Deploy the read-only raw input and any swap on encrypted storage with volume keys managed separately. Volume encryption is an operator control. The executable reads the supplied input and keeps raw clues, linkage state and the name index in memory. It writes no raw intermediate database. Quarantine records a reason code and input digest without copying unprocessed payloads. Console output contains aggregate counts. Treat the resulting pseudonymized release as sensitive.
-
-## Evidence and limitations
-
-On the 200-file organizer practice set the checker found 0 of 3,230 personal-data items and 0 of 4 canaries in the release. It preserved 4,763 of 4,855 utility items (98.1%). The 92 missing items were district names. Linkage scored precision 1.00, recall 0.74 and F0.5 0.94. The run exported 195 files, quarantined five and assigned pseudonyms to 719 of 823 records. A separate two-row synthetic fixture with a new name and an alternate header preserved both doses, one patient pseudonym and the nine-day interval across shifted dates.
-
-Zero detected practice leaks do not establish anonymity. A released registration table still had two singleton groups across nine age-band, sex and district combinations for 27 linked patients. The official attacks may use additional attributes. Unfamiliar name forms, nested schemas, unsupported encodings and ambiguous dates remain risks. Hidden-set scores and operator storage encryption require independent verification.
+The first checker verifies the file format, the second measures practice results and the last checks submission readiness. On Linux use `export RAKSHA_SECRET=practice` to set the key. On Windows keep the toolkit's original line endings so the checker can recognize renamed files. Developers can install pytest and run `python -m pytest -q`. The judges use `raksha.toml` to start the program; privacy settings are in `config/policy.yaml`.
