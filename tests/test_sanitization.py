@@ -32,3 +32,16 @@ class HospitalIdentifierTests(unittest.TestCase):
         self.assertEqual(list(read_rows(result)), [
             ["Address", "Dose"], ["[ADDRESS]", "650 mg"]
         ])
+
+class JsonPatientNameTests(unittest.TestCase):
+    def test_only_patient_name_is_redacted(self):
+        import json
+        from main import process_json
+
+        report = {
+            "patient": {"name": "Example Patient"},
+            "referred_by": "Dr. Example",
+            "panels": [{"name": "Glucose", "result": "245 mg/dL"}],
+        }
+        cleaned = json.loads(process_json(json.dumps(report), "lab/example.json", []))
+        self.assertEqual(cleaned, {**report, "patient": {"name": "[PATIENT_NAME]"}})

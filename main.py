@@ -122,14 +122,22 @@ def clean_text(text: str) -> str:
     return text
 
 
-def clean_value(v):
+def clean_value(v, parent_key=""):
     if isinstance(v, str):
         return clean_text(v)
     if isinstance(v, list):
-        return [clean_value(x) for x in v]
+        return [clean_value(x, parent_key) for x in v]
     if isinstance(v, dict):
         # JSON keys can be PII too (for example a dict keyed by patient name)
-        return {clean_text(k): clean_value(x) for k, x in v.items()}
+        cleaned = {}
+        for key, value in v.items():
+            field = key.strip().casefold()
+            if parent_key == "patient" and field == "name" and isinstance(value, str) and value.strip():
+                cleaned[clean_text(key)] = "[PATIENT_NAME]"
+                Stats.identifiers += 1
+            else:
+                cleaned[clean_text(key)] = clean_value(value, field)
+        return cleaned
     return v  # numbers, booleans, null keep their type
 
 
