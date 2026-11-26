@@ -6,6 +6,8 @@ import json
 import re
 import unicodedata
 from pathlib import Path
+from functools import lru_cache
+from itertools import chain, islice
 
 from .contracts import Clues, ParsedFile, RecordRef
 from .formats import json_units, load_json, read_rows
@@ -26,9 +28,25 @@ with _alias_file.open(encoding="utf-8-sig") as stream:
     }
 
 
+@lru_cache(maxsize=2048)
 def classify_header(header: str) -> str | None:
     """Return a known field type, or None if the header needs other checks."""
-    return _field_types.get(_normalize(header))
+    if kind := _field_types.get(_normalize(header)):
+        return kind
+    spaced = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", header)
+    words = set(re.findall(r"[a-z]+", spaced.casefold()))
+    if words & {"doctor", "provider", "clinician", "drug", "test", "diagnosis", "hospital"}:
+        return None
+    if words & {"name", "naam", "surname", "forename"}:
+        if words & {"guardian", "relative", "father", "mother", "husband", "wife", "spouse", "kin", "attendant"}:
+            return "RELATIVE_NAME"
+        if words & {"patient", "pt", "beneficiary", "registrant", "subject"}:
+            return "PATIENT_NAME"
+    if words & {"village", "mohalla", "gaon", "hamlet"}:
+        return "LOCALITY"
+    if "age" in words and not words & {"gestational", "bone", "onset", "adjusted"}:
+        return "AGE"
+    return None
 
 def classify_columns(headers: list[str]) -> list[str | None]:
     """Interpret ambiguous name columns only in patient-registration tables."""
@@ -42,6 +60,23 @@ def classify_columns(headers: list[str]) -> list[str | None]:
                 types[i] = "PATIENT_NAME"
     return types
 
+def table_schema(headers, rows):
+    """Use explicit titles in otherwise unlabelled columns as name evidence."""
+    sample = list(islice(rows, 64))
+    kinds = classify_columns(headers)
+    for i, kind in enumerate(kinds):
+        if kind is None and re.fullmatch(r"(?:extra|unknown|col(?:umn)?|field)[ _-]*\d*", headers[i], re.I):
+            values = [row[i].strip() for row in sample if i < len(row) and row[i].strip()]
+            if not values:
+                continue
+            for inferred, pattern in (("PATIENT_NAME", TITLED_NAME), ("RELATIVE_NAME", RELATIVE_LABEL),
+                                      ("AGE", AGE_WITH_UNIT), ("LOCALITY", LABELLED_VILLAGE)):
+                if all(pattern.fullmatch(value) for value in values):
+                    kinds[i] = inferred
+                    break
+    return kinds, chain(sample, rows)
+
+
 # --------------------------------------------------------------------------- text span patterns
 #   * column-aware rules: a column named like a name/phone/address is PII whatever it contains
 #     (but expect renamed columns on hidden data: "Patient's Name", "Gram/Mohalla", ...);
@@ -52,6 +87,13 @@ def classify_columns(headers: list[str]) -> list[str | None]:
 #   * JSON keys, CSV headers, file names and base64 attachments can all hold PII.
 PERSON_WORD = r"[A-Z][^\W\d_]*(?:[-'’][^\W\d_]+)*"
 PERSON_NAME = rf"{PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{1,3}}"
+AGE_WITH_UNIT = re.compile(r"(\d{1,3})\s*(?:years?|yrs?|वर्ष)(?:\s+old)?", re.I)
+LABELLED_VILLAGE = re.compile(r"(?:village|gaon|ग्राम)\s*:\s*\S.+", re.I)
+TITLED_NAME = re.compile(rf"(?i:Mr|Mrs|Ms)\.?[ \t]+{PERSON_NAME}")
+PATIENT_CUE = re.compile(
+    rf"(?P<label>\b(?i:pt|patient|mr|mrs|ms)\.?[ \t]*:?[ \t]+)"
+    rf"(?!(?i:Dr|Doctor|Mr|Mrs|Ms|BP|ID|Name|No)\b){PERSON_NAME}"
+)
 # Kinship labels identify a relative even when only a first name is given.
 RELATIVE_WORD = rf"(?:{PERSON_WORD}|[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*)"
 RELATIVE_LABEL = re.compile(
@@ -158,16 +200,16 @@ _ICD_RX = re.compile(r"\b([A-Z]\d{2}(?:\.\d{1,2})?)\b")
 _LOC_RANK = {"village": 0, "villagemohalla": 0, "gaon": 0, "गाँव": 0, "ग्राम": 0, "city": 0,
              "mohalla": 0, "locality": 0, "tehsil": 1, "block": 1, "district": 2, "jila": 2, "जिला": 2}
 
-def extract_clues(ref, fields, narrative="", order="dmy"):
+def extract_clues(ref, fields, narrative="", order="dmy", kinds=None):
     clues = Clues(ref)
     targets = {"PATIENT_NAME": clues.names, "MRN": clues.hospital_ids, "PHONE": clues.phones,
                "RELATIVE_NAME": clues.relatives, "AADHAAR": clues.gov_ids, "ABHA_NUMBER": clues.gov_ids}
     located = []
-    for key, value in fields:
+    for index, (key, value) in enumerate(fields):
         if not isinstance(value, (str, int)) or not str(value).strip():
             continue
         raw = str(value).strip()
-        kind = classify_header(key)
+        kind = kinds[index] if kinds is not None else classify_header(key)
         if key.casefold() in {"patient_ref", "hospital_uhid"}:
             kind = "MRN"
         if kind in targets:
@@ -180,10 +222,10 @@ def extract_clues(ref, fields, narrative="", order="dmy"):
         if norm.startswith("dob") or norm in {"dateofbirth", "birthdate", "janmtithi"}:
             if (d := parse_date(raw, order)):
                 clues.dob = d.isoformat()
-        elif norm in _AGE_KEYS and (m := re.match(r"\d{1,3}", raw)):
+        elif (kind == "AGE" or norm in _AGE_KEYS) and (m := re.match(r"\d{1,3}", raw)):
             clues.age = int(m[0])
-        elif norm in _LOC_RANK:
-            located.append((_LOC_RANK[norm], raw))
+        elif norm in _LOC_RANK or kind == "LOCALITY":
+            located.append((_LOC_RANK.get(norm, 0), raw))
         for icd in _ICD_RX.findall(raw):
             clues.conditions.append(icd)
     clues.locations = [v for _, v in sorted(located, key=lambda t: t[0])]
@@ -270,7 +312,8 @@ def collect_clues(parsed: ParsedFile) -> list[Clues]:
     if parsed.kind == "table":
         rows = read_rows(parsed.text, parsed.delimiter)
         header = next(rows, [])
-        return [extract_clues(RecordRef(rel, f"row:{i}"), zip(header, row), order=order)
+        kinds, rows = table_schema(header, rows)
+        return [extract_clues(RecordRef(rel, f"row:{i}"), zip(header, row), order=order, kinds=kinds)
                 for i, row in enumerate(rows)]
     if parsed.kind == "json":
         return [extract_clues(RecordRef(rel, loc), json_fields(unit), order=order)

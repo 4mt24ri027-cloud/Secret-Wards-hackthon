@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 from .contracts import ParsedFile
-from .detect import classify_columns, classify_header
+from .detect import table_schema, classify_header
 from .formats import load_json, read_rows
 
 Names = dict[str, str]  # casefolded name -> placeholder
@@ -84,7 +84,7 @@ def declared_names(parsed: ParsedFile) -> Names:
     found: Names = {}
     if parsed.kind == "table":
         rows = read_rows(parsed.text, parsed.delimiter)
-        kinds = classify_columns(next(rows, []))
+        kinds, rows = table_schema(next(rows, []), rows)
         for row in rows:
             for kind, value in zip(kinds, row):
                 if kind in {"PATIENT_NAME", "RELATIVE_NAME"}:

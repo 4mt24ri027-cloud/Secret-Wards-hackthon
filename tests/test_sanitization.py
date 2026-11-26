@@ -230,3 +230,32 @@ class FhirMentionTests(unittest.TestCase):
         self.assertEqual(obs["subject"], {"display": "[PATIENT_NAME]", "reference": "Patient/p1"})
         self.assertEqual(ET.fromstring(obs["text"]["div"]).text, "[PATIENT_NAME], 5 mg")
         self.assertEqual(base64.b64decode(obs["attachment"]["data"]), b"[PATIENT_NAME], 5 mg")
+
+
+def test_unseen_registration_labels_and_opaque_column():
+    header = "BeneficiaryFullName,Guardian display name,Age at intake,Home village,District,Extra,Dose"
+    source = header + "\nTara West,Aman West,43,Riverton,North,Mr. Milan East,5 mg\n"
+    from wards.privacy import age_label
+    row = list(read_rows(clean_file("new.csv", source)))[1]
+    assert row == ["[PATIENT_NAME]", "[RELATIVE_NAME]", age_label(43, 1),
+                   "North", "North", "[PATIENT_NAME]", "5 mg"]
+
+
+def test_narrative_patient_cues():
+    from wards.sanitize import clean_text
+    assert clean_text("Pt. Tara West, seen by Dr. Mira East.") == "Pt. [PATIENT_NAME], seen by Dr. Mira East."
+    assert clean_text("Patient: Mr. Kiran Vale, BP 120/80") == "Patient: Mr. [PATIENT_NAME], BP 120/80"
+
+
+def test_opaque_column_content_and_json_demographics():
+    import json
+    from wards.privacy import age_label
+
+    source = "Field1,Field2,Field3,Field4\nS/o Arun Vale,43 years old,Village: Elm,650 mg\n"
+    assert list(read_rows(clean_file("new.csv", source)))[1] == [
+        "[RELATIVE_NAME]", age_label(43), "[LOCALITY]", "650 mg"
+    ]
+    record = {"intakeAge": "43 yrs", "homeVillage": "Elm", "guardianFullName": "Arun Vale"}
+    assert json.loads(clean_file("new.json", json.dumps(record))) == {
+        "intakeAge": age_label(43), "homeVillage": "[LOCALITY]", "guardianFullName": "[RELATIVE_NAME]"
+    }

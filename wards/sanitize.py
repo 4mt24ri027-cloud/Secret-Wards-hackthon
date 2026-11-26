@@ -13,7 +13,7 @@ from pathlib import PurePosixPath
 
 from .contracts import Decision, ParsedFile, RecordRef, SanitizeResult
 from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DOB, PATTERNS,
-                     RELATIVE_LABEL, VISIT_BP_SUBJECT, classify_columns, classify_header)
+                     RELATIVE_LABEL, VISIT_BP_SUBJECT, AGE_WITH_UNIT, PATIENT_CUE, table_schema, classify_header)
 from .formats import decode, dump_json, json_units, load_json, read_rows, write_rows
 from .names import Names, Redactor, declared_names, full_names, json_names
 from .dates import detect_order, shift_dates
@@ -65,6 +65,8 @@ def clean_text(text: str) -> str:
     text, count = _known.apply(text)
     _count.identifiers += count
     text, count = RELATIVE_LABEL.subn(r"\g<label>[RELATIVE_NAME]", text)
+    _count.identifiers += count
+    text, count = PATIENT_CUE.subn(r"\g<label>[PATIENT_NAME]", text)
     _count.identifiers += count
     for kind, rx in PATTERNS:
         text, n = rx.subn(f"[{kind}]" if kind != "NAME" else " [NAME]", text)
@@ -170,10 +172,18 @@ def _clean_value(v, parent_key, units=None):
                 else:
                     cleaned[key] = clean_text(v["district"]) if isinstance(v.get("district"), str) and v["district"] else "[LOCALITY]"
                 continue
-            if field in _AGE_FIELDS and isinstance(value, (int, str)) and re.fullmatch(r"\d{1,3}", str(value).strip()):
-                cleaned[new_key] = age_label(int(value), _count.widen)
-                continue
-            if classify_header(key) == "PATIENT_NAME" or (field == "name" and patient_context):
+            kind = classify_header(key)
+            if (kind == "AGE" or field in _AGE_FIELDS) and isinstance(value, (int, str)):
+                age = str(value).strip()
+                match = re.fullmatch(r"(\d{1,3})", age) or AGE_WITH_UNIT.fullmatch(age)
+                if match:
+                    cleaned[new_key] = age_label(int(match[1]), _count.widen)
+                    continue
+            if kind == "LOCALITY" and isinstance(value, str) and value.strip():
+                cleaned[new_key] = "[LOCALITY]"
+            elif kind == "RELATIVE_NAME":
+                cleaned[new_key] = clean_person_name(value, "[RELATIVE_NAME]")
+            elif kind == "PATIENT_NAME" or (field == "name" and patient_context):
                 cleaned[new_key] = clean_person_name(value, "[PATIENT_NAME]")
             elif (parent_key.strip("_").casefold() in {"export_meta", "metadata"}
                   and field in {"source_path", "sourcepath"} and isinstance(value, str) and value):
@@ -275,7 +285,7 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
     header = next(rows, None)
     if header is None:
         return "", records, 0
-    field_types = classify_columns(header)
+    field_types, rows = table_schema(header, rows)
     labels = [name.strip().casefold() for name in header]
     district = next((i for i, name in enumerate(labels) if name in {"district", "jila", "जिला"}), None)
     add_reference = any(ref.file == rel and d.patient_id for ref, d in decisions.items()) and "PATIENT_NAME" not in field_types
@@ -292,13 +302,13 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
         for col, (label, value) in enumerate(zip(labels, row)):
             if not value.strip():
                 continue
-            if label in {"village/mohalla", "village", "gaon", "गाँव", "ग्राम"} or (label == "city" and district is not None):
+            if field_types[col] == "LOCALITY" or label in {"village/mohalla", "village", "gaon", "गाँव", "ग्राम"} or (label == "city" and district is not None):
                 cleaned[col] = cleaned[district] if district is not None and district < len(cleaned) and cleaned[district] else "[LOCALITY]"
             elif label in {"pin", "pin code", "pincode", "zip", "postal code"}:
                 cleaned[col] = "[POSTCODE]"
             elif label in {"dob", "date of birth", "janm tithi"} or label.startswith("dob ("):
                 cleaned[col] = "[DOB]"
-            elif label in _AGE_FIELDS and (match := re.fullmatch(r"(\d{1,3})(?:\s*(?:years?|yrs?|वर्ष))?", value.strip(), re.I)):
+            elif (field_types[col] == "AGE" or label in _AGE_FIELDS) and (match := (re.fullmatch(r"(\d{1,3})", value.strip()) or AGE_WITH_UNIT.fullmatch(value.strip()))):
                 cleaned[col] = age_label(int(match[1]), _count.widen)
             else:
                 continue
