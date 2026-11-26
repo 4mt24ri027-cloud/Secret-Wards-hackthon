@@ -97,6 +97,10 @@ RELATIVE_LABEL = re.compile(
     rf"{RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
 )
 PATTERNS = [
+    ("PATIENT_NAME", re.compile(
+        rf"(?<=(?i:sample received from) ){RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
+        r"(?=['’]s[ \t]+(?i:attendant)\b)"
+    )),
     # Hospital record numbers in narrative text, including year/serial forms.
     ("MRN", re.compile(
         r"(?i)(?<![\w/-])(?:UHID|MRN|IPD|IP|ADM|JJH|SNJ|DHH)"
