@@ -158,3 +158,15 @@ class ExportMetadataTests(unittest.TestCase):
                 "_export_meta": {"source_path": "[SOURCE_PATH]", "system": "OPD"},
                 "result": "245 mg/dL"
             })
+
+class PatientDemographicsTests(unittest.TestCase):
+    def test_fhir_birth_year_and_district_preserve_encounter_date(self):
+        from main import clean_value
+
+        patient = {"resourceType": "Patient", "birthDate": "1986-05-17",
+                   "address": [{"city": "Example Village", "district": "Example District", "postalCode": "123456"}]}
+        cleaned = clean_value(patient)
+        self.assertEqual(cleaned["birthDate"], "1986")
+        self.assertEqual(cleaned["address"][0], {"city": "Example District", "district": "Example District",
+                                                "postalCode": "[POSTCODE]"})
+        self.assertEqual(clean_value({"date": "2025-05-17"}), {"date": "2025-05-17"})
