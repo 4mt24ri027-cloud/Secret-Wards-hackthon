@@ -20,13 +20,7 @@ A name found on a registration form can help Secret Wards spot the same name in 
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    A[Hospital files] --> B[Find identifying details]
-    B --> C[Link records for the same patient]
-    C --> D[Clean each record]
-    D --> E[Cleaned files, report and record index]
-```
+![Secret Wards Architecture](assets/architecture.svg)
 
 In the record index, the same patient ID on two lines means the tool linked those records. A `null` ID means the tool could not assign an ID with the available evidence.
 
