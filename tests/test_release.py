@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from main import main
 from wards.release import Stats, choose_rel, reason_of, safe_rel, write_release, write_sanitized
 
 
@@ -64,3 +65,50 @@ def test_release_counts_and_exports_only_records_from_released_files(tmp_path):
         "records_processed": 2, "records_linked": 1, "identifiers_detected": 3,
         "records_generalized": 2, "records_suppressed": 1, "records_quarantined": 0,
     }
+
+
+# --------------------------------------------------------------------------- whole pipeline
+def _make_input(tmp_path):
+    inp = tmp_path / "input"
+    (inp / "ward").mkdir(parents=True)
+    (inp / "ward" / "table.csv").write_text("UHID,Dose\nUHID-012345,650 mg\nUHID-054321,5 mg\n", encoding="utf-8")
+    (inp / "ward" / "visits.json").write_text('{"visits":[{"patient_ref":"UHID-012345"}]}', encoding="utf-8")
+    (inp / "note_9876543210.txt").write_text("Seen under UHID-012345.", encoding="utf-8")
+    (inp / "broken.json").write_text('{"patient":', encoding="utf-8")
+    (inp / "scan.pdf").write_bytes(b"%PDF-1.4 synthetic")
+    return inp
+
+
+def _run(inp, out):
+    assert main(["--input", str(inp), "--output", str(out)]) == 0
+    records = [json.loads(line) for line in (out / "records.jsonl").read_text(encoding="utf-8").splitlines()]
+    tree = {p.relative_to(out).as_posix(): p.read_bytes()
+            for p in sorted((out / "sanitized").rglob("*")) if p.is_file()}
+    return records, tree
+
+
+def test_pipeline_locators_quarantine_and_renaming(tmp_path):
+    out = tmp_path / "out"
+    records, tree = _run(_make_input(tmp_path), out)
+    assert sorted(r["loc"] for r in records) == ["/visits/0", "doc", "row:0", "row:1"]
+    assert {r["file"] for r in records} == set(tree)
+    assert not any("9876543210" in name or "broken" in name or "scan" in name for name in tree)
+    report = json.loads((out / "report.json").read_text(encoding="utf-8"))
+    assert report["counts"]["files_total"] == 5
+    assert report["counts"]["files_quarantined"] == 2
+
+
+def test_pipeline_is_deterministic_and_keyed(tmp_path, monkeypatch):
+    inp = _make_input(tmp_path)
+    first = _run(inp, tmp_path / "one")
+    assert first == _run(inp, tmp_path / "two")
+    monkeypatch.setenv("RAKSHA_SECRET", "rotated-secret")
+    assert first != _run(inp, tmp_path / "three")
+
+
+def test_pipeline_without_secret_writes_nothing(tmp_path, monkeypatch):
+    inp = _make_input(tmp_path)
+    monkeypatch.delenv("RAKSHA_SECRET")
+    with pytest.raises(RuntimeError, match="RAKSHA_SECRET"):
+        main(["--input", str(inp), "--output", str(tmp_path / "out")])
+    assert not (tmp_path / "out").exists()

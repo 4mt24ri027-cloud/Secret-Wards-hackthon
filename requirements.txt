@@ -1,6 +1,5 @@
-# The starter uses only the Python standard library.
-# Add what you need, for example:
-# rapidfuzz
-# jellyfish
-# indic-transliteration
-# cryptography
+# Runtime: none. The pipeline uses only the Python standard library (3.10+),
+# so "pip install -r requirements.txt" installs nothing.
+#
+# Development only (to run the tests; the evaluator does not need it):
+#   pip install pytest

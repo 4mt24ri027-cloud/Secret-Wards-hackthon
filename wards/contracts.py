@@ -15,6 +15,15 @@ class RecordRef:
     loc: str   # "row:N" (0-based, header excluded) | "/json/pointer" | "doc"
 
 
+@dataclass(frozen=True)
+class ParsedFile:
+    """One decoded input file (formats.read_file)."""
+    rel: str                      # path relative to --input, posix style
+    kind: str                     # "table" | "json" | "text"
+    text: str                     # decoded content
+    delimiter: str = ","          # used when kind == "table"
+
+
 @dataclass
 class Clues:
     """P1 -> P2. Raw evidence found in ONE record. Values are as seen, not normalised
@@ -34,29 +43,34 @@ class Clues:
 
 @dataclass
 class Decision:
-    """P2 -> P1. What P1's sanitizer must apply to ONE record."""
+    """P2 -> P1. The privacy decision for ONE record.
+
+    The sanitizer currently applies patient_id only. Ages in tables are banded with
+    privacy.age_band() (width from policy.yaml). shift_days, age_band_years, location_level
+    and suppress are produced here but NOT YET APPLIED to the output.
+    """
     ref: RecordRef
     patient_id: str | None        # "PSN-XXXXXX" if linked; None if evidence too weak
-    shift_days: int               # applied to EVERY date in the record (never 0)
-    age_band_years: int           # width from policy.yaml; P1 calls privacy.age_band()
+    shift_days: int               # to be applied to EVERY date in the record (never 0)
+    age_band_years: int           # width from policy.yaml
     location_level: str           # "keep" | "district" | "state" | "remove"
     suppress: bool = False        # True -> drop the record's quasi-identifiers (rare combo)
 
 
 @dataclass
 class SanitizeResult:
-    """P1 -> P2 for one file."""
-    text: str                     # cleaned file content (UTF-8), same format as input
+    """P1 -> P2 for one successfully cleaned file. Failures raise instead."""
+    text: str                     # cleaned file content, same format as input
+    records: list[dict]           # {"loc": ..., "patient": ...} per record, in file order
     identifiers_detected: int
-    new_name: str | None = None   # cleaned file name if the original name held PII
-    ok: bool = True               # False -> release.py quarantines the file
-    reason: str = ""              # short identifier like "bad_json"; never file content
+    records_generalized: int = 0  # table rows and text notes; JSON/FHIR not counted yet
+    new_name: str | None = None   # neutral file name if the original name held PII
 
 
-# ---- function signatures each side promises (implement in the named module) ----
-# formats.py   read_file(path: Path) -> ParsedFile                      (P1)
-# detect.py    collect_clues(parsed: ParsedFile) -> list[Clues]         (P1)
-# linkage.py   link(all_clues: list[Clues]) -> dict[RecordRef, str|None]  canonical key per record  (P2)
-# privacy.py   decide(key: str|None, clues: Clues) -> Decision          (P2)
-# sanitize.py  sanitize_file(parsed: ParsedFile, decisions: dict[RecordRef, Decision]) -> SanitizeResult  (P1)
-# release.py   write_release(results, decisions, out_dir) -> None       (P2)
+# ---- call order used by main.py ----
+# formats.read_file(rel: str, raw: bytes) -> ParsedFile                              (P1)
+# detect.collect_clues(parsed: ParsedFile) -> list[Clues]                            (P1)
+# linkage.link(all_clues: list[Clues]) -> dict[RecordRef, str | None]                (P2)
+# privacy.decide(key: str | None, clues: Clues, book: PseudonymBook) -> Decision     (P2)
+# sanitize.sanitize_file(parsed, decisions: dict[RecordRef, Decision]) -> SanitizeResult   (P1)
+# release.safe_rel / choose_rel / write_sanitized / write_release(out, files, records, stats, seconds)   (P2)
