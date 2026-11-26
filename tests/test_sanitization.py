@@ -195,3 +195,12 @@ class HindiPrescriptionTests(unittest.TestCase):
 
         note = "नाम: तारा देवी   आयु: 42 वर्ष\nतारा देवी को बुखार है।\nRx 100 mg\nDr. Example"
         self.assertEqual(process_text(note, "rx.txt", []), note.replace("तारा देवी", "[PATIENT_NAME]"))
+
+class VisitSubjectTests(unittest.TestCase):
+    def test_bp_subject_without_honorific(self):
+        from main import clean_value
+
+        for subject, expected in [("Nila", "[PATIENT_NAME]"), ("Patient", "Patient"), ("Mother", "Mother")]:
+            suffix = " ka BP 112/78, review after 2 weeks."
+            visits = {"visits": [{"notes": subject + suffix}]}
+            self.assertEqual(clean_value(visits)["visits"][0]["notes"], expected + suffix)

@@ -172,6 +172,13 @@ def clean_person_name(value, placeholder):
     return value
 
 
+VISIT_BP_SUBJECT = re.compile(
+    rf"^{PERSON_WORD}(?=[ \t]+ka[ \t]+BP[ \t]+\d{{2,3}}/\d{{2,3}}\b)"
+)
+GENERIC_BP_SUBJECTS = {"patient", "pt", "mareez", "mariz", "mother", "father",
+                       "baby", "child", "doctor", "nurse", "ward", "aaj", "kal"}
+
+
 def clean_value(v, parent_key=""):
     if isinstance(v, str):
         return clean_text(v)
@@ -202,6 +209,12 @@ def clean_value(v, parent_key=""):
             elif (parent_key.strip("_").casefold() in {"export_meta", "metadata"}
                   and field in {"source_path", "sourcepath"} and isinstance(value, str) and value):
                 cleaned[clean_text(key)] = "[SOURCE_PATH]"
+            elif field == "notes" and parent_key == "visits" and isinstance(value, str):
+                subject = VISIT_BP_SUBJECT.match(value)
+                if subject and subject.group().casefold() not in GENERIC_BP_SUBJECTS:
+                    value = "[PATIENT_NAME]" + value[subject.end():]
+                    Stats.identifiers += 1
+                cleaned[key] = clean_text(value)
             elif field == "name" and parent_key == "guardian":
                 cleaned[clean_text(key)] = clean_person_name(value, "[RELATIVE_NAME]")
             elif (field == "line" and parent_key == "address") or field == "address_note":
