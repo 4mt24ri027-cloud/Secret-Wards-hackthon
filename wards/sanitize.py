@@ -15,7 +15,7 @@ from .contracts import Decision, ParsedFile, RecordRef, SanitizeResult
 from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DOB, PATTERNS,
                      RELATIVE_LABEL, VISIT_BP_SUBJECT, classify_columns, classify_header)
 from .formats import decode, dump_json, json_units, load_json, read_rows, write_rows
-from .names import Names, Redactor, declared_names, full_names
+from .names import Names, Redactor, declared_names, full_names, json_names
 from .dates import detect_order, shift_dates
 from .privacy import POLICY, age_label, secret
 
@@ -94,6 +94,40 @@ def _unique(key: str, taken: dict) -> str:
         candidate = f"{key}_{number}"
     return candidate
 
+def _plain_attachment(value, transform):
+    if not isinstance(value, str):
+        raise ValueError("invalid_attachment")
+    payload = base64.b64decode("".join(value.split()), validate=True)
+    decoded = decode(payload)
+    if decoded is None:
+        raise ValueError("undecodable_attachment")
+    return base64.b64encode(transform(decoded).encode("utf-8")).decode("ascii")
+
+
+def redact_bundle_mentions(bundle):
+    """Redact declared names in FHIR displays, XHTML narratives and plain-text attachments in place."""
+    redactor = Redactor(json_names(bundle))
+    if not redactor.names:
+        return
+
+    def redact(text):
+        return redactor.apply(text)[0]
+
+    stack = [bundle]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, list):
+            stack.extend(node)
+        elif isinstance(node, dict):
+            for key, value in node.items():
+                if isinstance(value, (dict, list)):
+                    stack.append(value)
+                elif key in {"display", "div"} and isinstance(value, str):
+                    node[key] = redact(value)
+                elif key == "data" and str(node.get("contentType", "")).partition(";")[0].strip().lower() == "text/plain":
+                    node[key] = _plain_attachment(value, redact)
+
+
 def clean_value(v, parent_key="", *, units=None):
     if units and id(v) in units:
         decisions, rel, loc = units[id(v)]
@@ -154,13 +188,7 @@ def _clean_value(v, parent_key, units=None):
                 cleaned[new_key] = "[CONTACT_NAME]"
                 _count.identifiers += 1
             elif field == "data" and str(v.get("contentType", "")).split(";")[0].strip().lower() == "text/plain":
-                if not isinstance(value, str):
-                    raise ValueError("invalid_attachment")
-                payload = base64.b64decode("".join(value.split()), validate=True)
-                decoded = decode(payload)
-                if decoded is None:
-                    raise ValueError("undecodable_attachment")
-                cleaned[key] = base64.b64encode(clean_text(decoded).encode("utf-8")).decode("ascii")
+                cleaned[key] = _plain_attachment(value, clean_text)
             elif (classify_header(key) in {"AADHAAR", "INSURANCE_ID"}
                   and isinstance(value, (str, int)) and str(value).strip()):
                 cleaned[new_key] = f"[{classify_header(key)}]"

@@ -47,7 +47,8 @@ def _add_human_name(found: Names, value, placeholder: str) -> None:
                 _add(found, f"{given} {family}", placeholder)
 
 
-def _from_json(data, found: Names) -> None:
+def json_names(data) -> Names:
+    found: Names = {}
     stack = [data]  # iterative: exports can be nested very deeply
     while stack:
         node = stack.pop()
@@ -75,6 +76,8 @@ def _from_json(data, found: Names) -> None:
             elif key.casefold() == "guardian" and isinstance(value, dict):
                 _add_human_name(found, value.get("name"), "[RELATIVE_NAME]")
 
+    return found
+
 
 def declared_names(parsed: ParsedFile) -> Names:
     """Names that a structured field in this file identifies as a patient or relative."""
@@ -87,7 +90,7 @@ def declared_names(parsed: ParsedFile) -> Names:
                 if kind in {"PATIENT_NAME", "RELATIVE_NAME"}:
                     _add(found, value, f"[{kind}]")
     elif parsed.kind == "json":
-        _from_json(load_json(parsed.text), found)
+        return json_names(load_json(parsed.text))
     return found
 
 
