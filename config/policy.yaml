@@ -6,3 +6,4 @@ date_shift_max_days: 365   # every date of one patient moves by the same secret 
 min_group_size: 5          # k-anonymity threshold for (age band, sex, location)
 suppress_rare: 1
 location_level: district
+reference_year: 2026       # fixed year used to turn a birth year into an age (keeps runs identical)

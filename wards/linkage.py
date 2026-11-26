@@ -233,7 +233,7 @@ def _profile(i: int, c: Clues) -> _P:
         dob=c.dob.strip()[:10] if c.dob and c.dob.strip() else None,
         sex=norm_sex(c.sex),
         age=c.age if isinstance(c.age, int) and c.age >= 0 else None,
-        locs={l for x in c.locations if (l := _norm_loc(x))},
+        locs={l for x in c.locations[:1] if (l := _norm_loc(x))} if len(c.locations) > 1 else set(),
     )
 
 

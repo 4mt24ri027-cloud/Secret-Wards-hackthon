@@ -16,12 +16,16 @@ from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DO
                      RELATIVE_LABEL, VISIT_BP_SUBJECT, classify_columns, classify_header)
 from .formats import decode, dump_json, json_units, load_json, read_rows, write_rows
 from .names import Names, Redactor, declared_names, full_names
-from .privacy import age_band, secret
+from .dates import detect_order, shift_dates
+from .privacy import POLICY, age_label, secret
 
 Decisions = dict[RecordRef, Decision]
 
 
 class _Counter:
+    shift = 0
+    widen = 1
+    order = "dmy"
     identifiers = 0  # running total; sanitize_file reports the difference for one file
 
 
@@ -29,8 +33,28 @@ _count = _Counter()
 _known = Redactor({})  # names declared in structured fields; replaced for each file
 
 
-def _patient_id(decisions: Decisions, rel: str, loc: str) -> str | None:
+_DOB_KEYS = {"dob", "date_of_birth", "dateofbirth", "date of birth", "birth_date", "birthdate"}
+_AGE_FIELDS = {"age", "umar", "आयु", "उम्र"}
+_AGE_LABELLED = re.compile(r"(?i)((?:\bage|\baayu|\bumar|आयु|उम्र)[ \t]*[:\-]?[ \t]*)(\d{1,3})(?![\d\-/+]|\.\d)")
+_AGE_SEX = re.compile(r"(?<![\d/.\-])(\d{1,3})(?![\d\-+])(?=[ \t]*(?:(?i:yrs?|years?|y)|वर्ष)?[ \t]*/[ \t]*(?i:[MF])\b)")
+
+
+def band_ages(text):
+    def labelled(m):
+        age = int(m[2])
+        return m[1] + age_label(age, _count.widen) if age <= 120 else m[0]
+
+    def with_sex(m):
+        age = int(m[1])
+        return age_label(age, _count.widen) if age <= 120 else m[0]
+
+    return _AGE_SEX.sub(with_sex, _AGE_LABELLED.sub(labelled, text))
+
+
+def _enter(decisions: Decisions, rel: str, loc: str) -> str | None:
     decision = decisions.get(RecordRef(rel, loc))
+    _count.shift = decision.shift_days if decision else 0
+    _count.widen = int(POLICY.get('rare_age_widen', 4)) if decision and decision.suppress else 1
     return decision.patient_id if decision else None
 
 
@@ -45,7 +69,7 @@ def clean_text(text: str) -> str:
     for kind, rx in PATTERNS:
         text, n = rx.subn(f"[{kind}]" if kind != "NAME" else " [NAME]", text)
         _count.identifiers += n
-    return text
+    return shift_dates(band_ages(text), _count.shift, _count.order)
 
 def clean_person_name(value, placeholder):
     """Keep structured name shapes and replace only name-bearing strings."""
@@ -70,11 +94,22 @@ def _unique(key: str, taken: dict) -> str:
         candidate = f"{key}_{number}"
     return candidate
 
-def clean_value(v, parent_key=""):
+def clean_value(v, parent_key="", *, units=None):
+    if units and id(v) in units:
+        decisions, rel, loc = units[id(v)]
+        _enter(decisions, rel, loc)
+        try:
+            return _clean_value(v, parent_key)
+        finally:
+            _count.shift, _count.widen = 0, 1
+    return _clean_value(v, parent_key, units)
+
+
+def _clean_value(v, parent_key, units=None):
     if isinstance(v, str):
         return clean_text(v)
     if isinstance(v, list):
-        return [clean_value(x, parent_key) for x in v]
+        return [clean_value(x, parent_key, units=units) for x in v]
     if isinstance(v, dict):
         # JSON keys can be PII too (for example a dict keyed by patient name)
         cleaned = {}
@@ -87,14 +122,18 @@ def clean_value(v, parent_key=""):
                 if re.fullmatch(r"[0-9]{4}(?:-[0-9]{2}){0,2}", value):
                     cleaned[key] = value[:4]
                 continue
-            if field == "dob" and parent_key in {"patient", "patients"} and isinstance(value, str) and value:
-                cleaned[key] = "[DOB]"
+            if field in _DOB_KEYS and isinstance(value, str) and value:
+                _count.identifiers += 1
+                cleaned[new_key] = "[DOB]"
                 continue
             if parent_key == "address" and field in {"postalcode", "pin", "city", "village"} and isinstance(value, str) and value:
                 if field in {"postalcode", "pin"}:
                     cleaned[key] = "[POSTCODE]"
                 else:
                     cleaned[key] = clean_text(v["district"]) if isinstance(v.get("district"), str) and v["district"] else "[LOCALITY]"
+                continue
+            if field in _AGE_FIELDS and isinstance(value, (int, str)) and re.fullmatch(r"\d{1,3}", str(value).strip()):
+                cleaned[new_key] = age_label(int(value), _count.widen)
                 continue
             if classify_header(key) == "PATIENT_NAME" or (field == "name" and patient_context):
                 cleaned[new_key] = clean_person_name(value, "[PATIENT_NAME]")
@@ -132,7 +171,7 @@ def clean_value(v, parent_key=""):
                 cleaned[new_key] = "[PATIENT_REF]"
                 _count.identifiers += 1
             else:
-                cleaned[new_key] = clean_value(value, field)
+                cleaned[new_key] = clean_value(value, field, units=units)
         return cleaned
     return v  # numbers, booleans, null keep their type
 
@@ -201,9 +240,13 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
     safe_header = clean_header(header)
     cleaned_rows = [safe_header + ["patient_pseudonym"] if add_reference else safe_header]
     for i, row in enumerate(rows):
-        pid = _patient_id(decisions, rel, f"row:{i}")
+        pid = _enter(decisions, rel, f"row:{i}")
         cleaned, redacted = sanitize_row(row, field_types, pid)
         generalized = False
+        if _count.widen > 1 and int(POLICY.get("rare_drop_district", 1)):
+            if district is not None and district < len(cleaned) and cleaned[district]:
+                cleaned[district] = "[DISTRICT]"
+                generalized = True
         for col, (label, value) in enumerate(zip(labels, row)):
             if not value.strip():
                 continue
@@ -213,8 +256,8 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
                 cleaned[col] = "[POSTCODE]"
             elif label in {"dob", "date of birth", "janm tithi"} or label.startswith("dob ("):
                 cleaned[col] = "[DOB]"
-            elif label in {"age", "umar"} and (match := re.fullmatch(r"(\d{1,3})(?:\s*(?:years?|yrs?|वर्ष))?", value.strip(), re.I)):
-                cleaned[col] = age_band(int(match[1]))
+            elif label in _AGE_FIELDS and (match := re.fullmatch(r"(\d{1,3})(?:\s*(?:years?|yrs?|वर्ष))?", value.strip(), re.I)):
+                cleaned[col] = age_label(int(match[1]), _count.widen)
             else:
                 continue
             generalized = True
@@ -233,18 +276,21 @@ def _clean_table(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[di
 def _clean_json(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dict], int]:
     data = load_json(parsed.text)
     records = []
+    units = {}
     for loc, unit in json_units(data):
-        pid = _patient_id(decisions, parsed.rel, loc)
+        units[id(unit)] = decisions, parsed.rel, loc
+        pid = _enter(decisions, parsed.rel, loc)
         if pid and isinstance(unit, dict):
             if unit.get("resourceType") == "Bundle":
                 unit["identifier"] = {"system": "urn:secret-wards:pseudonym", "value": pid}
             else:
                 unit["patient_pseudonym"] = pid
         records.append({"loc": loc, "patient": pid})
-    return dump_json(clean_value(data)), records, 0
+    _count.shift, _count.widen = 0, 1
+    return dump_json(clean_value(data, units=units)), records, 0
 
 def _clean_document(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dict], int]:
-    pid = _patient_id(decisions, parsed.rel, "doc")
+    pid = _enter(decisions, parsed.rel, "doc")
     text = redact_declared_names(parsed.text)
     text, addresses = NOTE_ADDRESS.subn(r"\g<1>[ADDRESS]", text)
     text, births = NOTE_DOB.subn(r"\g<1>[DOB]", text)
@@ -259,9 +305,13 @@ def sanitize_file(parsed: ParsedFile, decisions: Decisions,
     """Clean one file. Counts cover only files that were cleaned successfully."""
     global _known
     _known = Redactor({**full_names(release_names or {}), **declared_names(parsed)})
+    _count.order = detect_order(parsed.text)
     before = _count.identifiers
     new_name = clean_filename(parsed.rel)
-    text, records, generalized = _CLEANERS[parsed.kind](parsed, decisions)
+    try:
+        text, records, generalized = _CLEANERS[parsed.kind](parsed, decisions)
+    finally:
+        _count.shift, _count.widen = 0, 1
     return SanitizeResult(
         text=text,
         records=records,

@@ -7,7 +7,7 @@ from main import make_decisions
 from wards.contracts import Clues, RecordRef
 from wards.formats import read_file
 from wards.linkage import link
-from wards.privacy import (PseudonymBook, age_band, date_shift_days, decide, pseudonym, rare_refs,
+from wards.privacy import (POLICY, PseudonymBook, age_band, date_shift_days, decide, pseudonym, rare_refs,
                            shift_date)
 from wards.sanitize import sanitize_file
 
@@ -125,7 +125,7 @@ def test_date_shift_is_bounded_nonzero_and_keeps_stay_length():
     admitted, discharged = dt.date(2026, 2, 10), dt.date(2026, 2, 20)
     for i in range(200):
         key = f"patient-{i}"
-        assert 0 < abs(date_shift_days(key)) <= 180
+        assert 0 < abs(date_shift_days(key)) <= POLICY["date_shift_max_days"]
         assert shift_date(discharged, key) - shift_date(admitted, key) == discharged - admitted
 
 

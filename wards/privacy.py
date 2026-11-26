@@ -49,6 +49,7 @@ def load_policy(path: Path) -> dict:
 
 
 POLICY = load_policy(ROOT / "config" / "policy.yaml")
+REF_YEAR = int(POLICY.get("reference_year", 2026))
 
 
 def secret() -> bytes:
@@ -146,7 +147,7 @@ def _quasi(c: Clues):
     elif c.dob and len(c.dob) >= 4 and c.dob[:4].isdigit():
         # a birth year is NOT an age: convert it, otherwise it lands in a different
         # numeric range than ages and the same people split into two groups
-        band = (dt.date.today().year - int(c.dob[:4])) // w
+        band = (REF_YEAR - int(c.dob[:4])) // w
     loc = c.locations[-1].strip().casefold() if c.locations else None
     if band is None and not loc:
         return (None, None, None)   # sex alone is not a quasi-identifier

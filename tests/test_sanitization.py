@@ -193,7 +193,7 @@ class HindiPrescriptionTests(unittest.TestCase):
     def test_repeated_patient_name_preserves_age_symptoms_and_dose(self):
 
         note = "नाम: तारा देवी   आयु: 42 वर्ष\nतारा देवी को बुखार है।\nRx 100 mg\nDr. Example"
-        self.assertEqual(clean_file("rx.txt", note), note.replace("तारा देवी", "[PATIENT_NAME]"))
+        self.assertEqual(clean_file("rx.txt", note), note.replace("तारा देवी", "[PATIENT_NAME]").replace("42 वर्ष", "40-44 वर्ष"))
 
 class VisitSubjectTests(unittest.TestCase):
     def test_bp_subject_without_honorific(self):
@@ -208,7 +208,7 @@ class DischargeNameTests(unittest.TestCase):
     def test_patient_roles_preserve_clinical_phrases(self):
 
         for original, expected in [
-            ("मरीज़ का नाम: तारा देवी    आयु: 42", "मरीज़ का नाम: [PATIENT_NAME]    आयु: 42"),
+            ("मरीज़ का नाम: तारा देवी    आयु: 42", "मरीज़ का नाम: [PATIENT_NAME]    आयु: 40-44"),
             ("Hb 9.9 g/dL. Tara amma ki condition ab stable hai.",
              "Hb 9.9 g/dL. [PATIENT_NAME] amma ki condition ab stable hai."),
             ("Tara, W/o Arun, discharged.", "[PATIENT_NAME], W/o [RELATIVE_NAME], discharged."),

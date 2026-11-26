@@ -21,7 +21,7 @@ from wards.detect import collect_clues
 from wards.formats import read_file
 from wards.linkage import link
 from wards.names import Names, declared_names
-from wards.privacy import PseudonymBook, decide
+from wards.privacy import PseudonymBook, decide, rare_refs
 from wards.release import Stats, choose_rel, reason_of, safe_rel, write_release, write_sanitized
 from wards.sanitize import sanitize_file
 
@@ -54,7 +54,8 @@ def make_decisions(paths: list[Path], inp: Path, book: PseudonymBook) -> dict[Re
             continue  # pass 2 reports the quarantine
     keys = link(clues)
     book.assign_all(key for key in keys.values() if key)  # order-independent collision handling
-    return {c.ref: decide(keys.get(c.ref), c, book) for c in clues}
+    rare = rare_refs([(keys.get(c.ref), c) for c in clues])
+    return {c.ref: decide(keys.get(c.ref), c, book, suppress=c.ref in rare) for c in clues}
 
 
 def release_files(paths: list[Path], inp: Path, out: Path, decisions: dict[RecordRef, Decision],
@@ -78,6 +79,10 @@ def release_files(paths: list[Path], inp: Path, out: Path, decisions: dict[Recor
             records.extend({"file": output, **row} for row in result.records)
             stats.identifiers_detected += result.identifiers_detected
             stats.records_generalized += result.records_generalized
+            stats.records_suppressed += sum(
+                1 for row in result.records
+                if (decision := decisions.get(RecordRef(rel, row["loc"]))) and decision.suppress
+            )
             entry.update(output=output, status="sanitized")
         files.append(entry)
     return files, records, stats
