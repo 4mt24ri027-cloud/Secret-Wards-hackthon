@@ -25,7 +25,7 @@ import csv
 import datetime as dt
 import hashlib
 import hmac
-from wards.detect import classify_header
+from wards.detect import classify_columns, classify_header
 from wards.formats import read_rows, write_rows
 from wards.sanitize import sanitize_row
 import json
@@ -315,7 +315,7 @@ def process_csv(text: str, delimiter: str, rel: str, records: list, ids=None) ->
     header = next(rows, None)
     if header is None:
         return ""
-    field_types = [classify_header(name) for name in header]
+    field_types = classify_columns(header)
     add_reference = ids and any(ref.file == rel for ref in ids) and "PATIENT_NAME" not in field_types
     cleaned_rows = [header + ["patient_pseudonym"] if add_reference else header]
     for i, row in enumerate(rows):

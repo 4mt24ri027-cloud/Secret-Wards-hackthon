@@ -22,3 +22,15 @@ with _alias_file.open(encoding="utf-8-sig") as stream:
 def classify_header(header: str) -> str | None:
     """Return a known field type, or None if the header needs other checks."""
     return _field_types.get(_normalize(header))
+
+def classify_columns(headers: list[str]) -> list[str | None]:
+    """Interpret ambiguous name columns only in patient-registration tables."""
+    types = [classify_header(header) for header in headers]
+    keys = [_normalize(header) for header in headers]
+    has_patient_id = "MRN" in types or bool({"patientid", "regno"}.intersection(keys))
+    has_birth_date = any(key.startswith("dob") or key in {"dateofbirth", "janmtithi"} for key in keys)
+    if has_patient_id and has_birth_date:
+        for i, key in enumerate(keys):
+            if key in {"naam", "firstname", "lastname"}:
+                types[i] = "PATIENT_NAME"
+    return types

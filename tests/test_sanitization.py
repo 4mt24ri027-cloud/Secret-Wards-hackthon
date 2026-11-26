@@ -137,3 +137,12 @@ class LabRemarkTests(unittest.TestCase):
                              "Sample received from [PATIENT_NAME]" + suffix)
         note = "Sample received from Central Lab. Hb 11.2 g/dL."
         self.assertEqual(clean_text(note), note)
+
+class RegistrationHeaderTests(unittest.TestCase):
+    def test_split_and_hinglish_names_require_registration_context(self):
+        from wards.detect import classify_columns
+
+        self.assertEqual(classify_columns(["Reg No", "Janm Tithi", "Naam"])[2], "PATIENT_NAME")
+        self.assertEqual(classify_columns(["PatientID", "DOB (MM/DD/YYYY)", "FirstName", "LastName"])[2:],
+                         ["PATIENT_NAME", "PATIENT_NAME"])
+        self.assertEqual(classify_columns(["Department", "FirstName"]), [None, None])
