@@ -204,3 +204,15 @@ class VisitSubjectTests(unittest.TestCase):
             suffix = " ka BP 112/78, review after 2 weeks."
             visits = {"visits": [{"notes": subject + suffix}]}
             self.assertEqual(clean_value(visits)["visits"][0]["notes"], expected + suffix)
+
+class DischargeNameTests(unittest.TestCase):
+    def test_patient_roles_preserve_clinical_phrases(self):
+        from main import process_text
+
+        for original, expected in [
+            ("मरीज़ का नाम: तारा देवी    आयु: 42", "मरीज़ का नाम: [PATIENT_NAME]    आयु: 42"),
+            ("Hb 9.9 g/dL. Tara amma ki condition ab stable hai.",
+             "Hb 9.9 g/dL. [PATIENT_NAME] amma ki condition ab stable hai."),
+            ("Tara, W/o Arun, discharged.", "[PATIENT_NAME], W/o [RELATIVE_NAME], discharged."),
+        ]:
+            self.assertEqual(process_text(original, "summary.txt", []), expected)

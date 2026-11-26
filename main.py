@@ -100,6 +100,13 @@ RELATIVE_LABEL = re.compile(
 )
 PATTERNS = [
     ("PATIENT_NAME", re.compile(
+        rf"\b{PERSON_WORD}(?=[ \t]+(?i:bhai|amma|ji|didi|sahab|behenji|bhenji|babu)"
+        r"[ \t]+ki[ \t]+condition\b)"
+    )),
+    ("PATIENT_NAME", re.compile(
+        rf"(?m)^{PERSON_WORD}(?:[ \t]+{PERSON_WORD}){{0,2}}(?=,[ \t]*(?i:[swd]/o)\s)"
+    )),
+    ("PATIENT_NAME", re.compile(
         rf"(?<=(?i:sample received from) ){RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
         r"(?=['’]s[ \t]+(?i:attendant)\b)"
     )),
@@ -416,7 +423,7 @@ NOTE_DOB = re.compile(
 
 
 HINDI_NAME_LINE = re.compile(
-    r"(?m)^[ \t]*(?:रोगी का नाम|मरीज का नाम|नाम)[ \t]*:[ \t]*"
+    r"(?m)^[ \t]*(?:रोगी का नाम|मरी(?:ज़|ज़|ज) का नाम|नाम)[ \t]*:[ \t]*"
     r"(?P<name>[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*(?:[ \t]+[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*){0,5}?)"
     r"(?=[ \t]*(?:आयु[ \t]*:|उम्र[ \t]*:|[,;|\r\n]|$))"
 )
