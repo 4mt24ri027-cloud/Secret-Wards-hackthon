@@ -24,7 +24,9 @@ import csv
 import datetime as dt
 import hashlib
 import hmac
+from wards.detect import classify_header
 from wards.formats import read_rows, write_rows
+from wards.sanitize import sanitize_row
 import json
 import os
 import re
@@ -161,12 +163,14 @@ def process_csv(text: str, delimiter: str, rel: str, records: list) -> str:
     header = next(rows, None)
     if header is None:
         return ""
+    field_types = [classify_header(name) for name in header]
     cleaned_rows = [header]
     for i, row in enumerate(rows):
         key = link_records(delimiter.join(row))
         pid = pseudonym(key) if key else None
-        # TODO(team): write pid into the row's patient column so it appears INSIDE the record
-        cleaned_rows.append([clean_text(c) for c in row])
+        cleaned, redacted = sanitize_row(row, field_types, pid, clean_text)
+        cleaned_rows.append(cleaned)
+        Stats.identifiers += redacted
         records.append({"file": f"sanitized/{rel}", "loc": f"row:{i}", "patient": pid})
         Stats.records += 1
         Stats.linked += pid is not None
