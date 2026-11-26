@@ -37,10 +37,14 @@ def classify_header(header: str) -> str | None:
     words = set(re.findall(r"[a-z]+", spaced.casefold()))
     if words & {"doctor", "provider", "clinician", "drug", "test", "diagnosis", "hospital"}:
         return None
+    if words & {"callback", "phone", "telephone", "contact", "mobile"} and words & {"digits", "number", "line"}:
+        return "PHONE"
+    if words & {"label", "caption", "display"} and words & {"recipient", "patient", "beneficiary", "registrant"}:
+        return "PATIENT_NAME"
     if words & {"name", "naam", "surname", "forename"}:
         if words & {"guardian", "relative", "father", "mother", "husband", "wife", "spouse", "kin", "attendant"}:
             return "RELATIVE_NAME"
-        if words & {"patient", "pt", "beneficiary", "registrant", "subject"}:
+        if words & {"patient", "pt", "beneficiary", "registrant", "subject", "recipient"}:
             return "PATIENT_NAME"
     if words & {"village", "mohalla", "gaon", "hamlet"}:
         return "LOCALITY"
@@ -91,7 +95,7 @@ AGE_WITH_UNIT = re.compile(r"(\d{1,3})\s*(?:years?|yrs?|वर्ष)(?:\s+old)?
 LABELLED_VILLAGE = re.compile(r"(?:village|gaon|ग्राम)\s*:\s*\S.+", re.I)
 TITLED_NAME = re.compile(rf"(?i:Mr|Mrs|Ms)\.?[ \t]+{PERSON_NAME}")
 PATIENT_CUE = re.compile(
-    rf"(?P<label>\b(?i:pt|patient|mr|mrs|ms)\.?[ \t]*:?[ \t]+)"
+    rf"(?P<label>\b(?i:pt|patient|mr|mrs|ms|(?:seen|assessed|examined) (?:today|yesterday) was)\.?[ \t]*:?[ \t]+)"
     rf"(?!(?i:Dr|Doctor|Mr|Mrs|Ms|BP|ID|Name|No)\b){PERSON_NAME}"
 )
 # Kinship labels identify a relative even when only a first name is given.
@@ -108,6 +112,9 @@ _NOT_BEFORE_HONORIFIC = (r"(?!(?:Dr|Doctor|Sir|Madam|Sister|Nurse|Haan|Nahi|Pati
 _NOT_DOCTOR = r"(?<!Dr )(?<!Dr\. )"
 
 PATTERNS = [
+    # Dotted ten-digit Indian mobile numbers with common grouping variations.
+    ("PHONE", re.compile(r"(?<![\d.])(?:\+?91[ .-])?[6-9](?=(?:\.?\d){9}(?!\d|\.\d))"
+                         r"\d{1,4}(?:\.\d{2,5}){1,3}(?!\d|\.\d)")),
     # "Kamal Bhaiya", "Mohan Papa": a name followed by a kinship word is a relative.
     ("RELATIVE_NAME", re.compile(
         rf"\b{_NOT_DOCTOR}{_NOT_BEFORE_HONORIFIC}{PERSON_WORD}"

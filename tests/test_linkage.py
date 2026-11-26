@@ -21,7 +21,9 @@ def same_patient(a, b):
     return result[a.ref] is not None and result[a.ref] == result[b.ref]
 
 
-def test_shared_id_links_but_name_alone_is_uncertain():
+def test_shared_id_links_but_name_alone_is_uncertain(monkeypatch):
+    from wards.privacy import POLICY
+    monkeypatch.setitem(POLICY, "weak_singleton_gets_id", 0)
     a = Clues(
         ref=RecordRef("hospital_a.csv", "row:0"),
         names=["Mahesh Chauhan"],
@@ -42,6 +44,9 @@ def test_shared_id_links_but_name_alone_is_uncertain():
     assert result[a.ref] is not None
     assert result[a.ref] == result[b.ref]
     assert result[c.ref] is None
+    monkeypatch.setitem(POLICY, "weak_singleton_gets_id", 1)
+    separate = link([a, b, c])
+    assert separate[c.ref] is not None and separate[c.ref] != separate[a.ref]
 
 
 def test_pipeline_links_csv_json_and_note(tmp_path):

@@ -259,3 +259,13 @@ def test_opaque_column_content_and_json_demographics():
     assert json.loads(clean_file("new.json", json.dumps(record))) == {
         "intakeAge": age_label(43), "homeVillage": "[LOCALITY]", "guardianFullName": "[RELATIVE_NAME]"
     }
+
+def test_unfamiliar_files_keep_clinical_values_and_remove_identifiers():
+    import json
+    table = clean_file("new.csv", "Beneficiary caption,Callback digits,Result\nNeris Talven,98.765.00235,118 mg/dL\n")
+    assert "Neris Talven" not in table and "98.765.00235" not in table and "118 mg/dL" in table
+    visit = clean_file("visit.json", json.dumps({"appointment": {
+        "recipient_label": "Orla Venn", "contact_line": "98.765.00236", "reading": "111/73"}}))
+    assert "Orla Venn" not in visit and "98.765.00236" not in visit and "111/73" in visit
+    note = clean_file("handover.txt", "Seen today was Dalen Miro. Call back at 98.765.00237. Dose 2.5 mg.")
+    assert "Dalen Miro" not in note and "98.765.00237" not in note and "2.5 mg" in note
