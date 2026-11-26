@@ -116,3 +116,24 @@ class RelativeLabelTests(unittest.TestCase):
 
         note = "C/O Fever. K/C/O diabetes. Dr. Example advised review."
         self.assertEqual(clean_text(note), note)
+
+class LabResultPrivacyTests(unittest.TestCase):
+    def test_patient_aliases_preserve_test_name_and_value(self):
+        from main import clean_value
+
+        for key in ("patient_name", "Patient Name"):
+            result = {"results": [{key: "Example Person", "name": "Glucose", "value": "245 mg/dL"}]}
+            self.assertEqual(clean_value(result)["results"][0], {
+                key: "[PATIENT_NAME]", "name": "Glucose", "value": "245 mg/dL"
+            })
+
+class LabRemarkTests(unittest.TestCase):
+    def test_attendant_phrase_preserves_clinical_text(self):
+        from main import clean_text
+
+        for name, apostrophe in [("Nila", "'"), ("Aman Dev", "’")]:
+            suffix = f"{apostrophe}s attendant. Hb 11.2 g/dL."
+            self.assertEqual(clean_text("Sample received from " + name + suffix),
+                             "Sample received from [PATIENT_NAME]" + suffix)
+        note = "Sample received from Central Lab. Hb 11.2 g/dL."
+        self.assertEqual(clean_text(note), note)

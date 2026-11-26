@@ -99,6 +99,10 @@ RELATIVE_LABEL = re.compile(
     rf"{RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
 )
 PATTERNS = [
+    ("PATIENT_NAME", re.compile(
+        rf"(?<=(?i:sample received from) ){RELATIVE_WORD}(?:[ \t]+{RELATIVE_WORD}){{0,3}}"
+        r"(?=['’]s[ \t]+(?i:attendant)\b)"
+    )),
     # Hospital record numbers in narrative text, including year/serial forms.
     ("MRN", re.compile(
         r"(?i)(?<![\w/-])(?:UHID|MRN|IPD|IP|ADM|JJH|SNJ|DHH)"
@@ -167,7 +171,8 @@ def clean_value(v, parent_key=""):
         cleaned = {}
         for key, value in v.items():
             field = key.strip().casefold()
-            if field == "name" and (parent_key in {"patient", "patients"} or v.get("resourceType") == "Patient"):
+            patient_context = parent_key in {"patient", "patients"} or v.get("resourceType") == "Patient"
+            if classify_header(key) == "PATIENT_NAME" or (field == "name" and patient_context):
                 cleaned[clean_text(key)] = clean_person_name(value, "[PATIENT_NAME]")
             elif field == "name" and parent_key == "guardian":
                 cleaned[clean_text(key)] = clean_person_name(value, "[RELATIVE_NAME]")
