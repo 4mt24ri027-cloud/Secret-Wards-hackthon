@@ -188,3 +188,10 @@ class VillagePrivacyTests(unittest.TestCase):
         self.assertEqual(process_text(note, "rx.txt", []), note.replace("उदाहरण", "[ADDRESS]"))
         result = process_csv("City,District,Dose\nExample Village,Example District,5 mg\n", ",", "r.csv", [])
         self.assertEqual(list(read_rows(result))[1], ["Example District", "Example District", "5 mg"])
+
+class HindiPrescriptionTests(unittest.TestCase):
+    def test_repeated_patient_name_preserves_age_symptoms_and_dose(self):
+        from main import process_text
+
+        note = "नाम: तारा देवी   आयु: 42 वर्ष\nतारा देवी को बुखार है।\nRx 100 mg\nDr. Example"
+        self.assertEqual(process_text(note, "rx.txt", []), note.replace("तारा देवी", "[PATIENT_NAME]"))

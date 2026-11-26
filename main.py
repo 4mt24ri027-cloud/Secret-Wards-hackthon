@@ -402,10 +402,28 @@ NOTE_DOB = re.compile(
 )
 
 
+HINDI_NAME_LINE = re.compile(
+    r"(?m)^[ \t]*(?:रोगी का नाम|मरीज का नाम|नाम)[ \t]*:[ \t]*"
+    r"(?P<name>[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*(?:[ \t]+[ऄ-हक़-ॡ][ऀ-ःऄ-ह़-ॣ]*){0,5}?)"
+    r"(?=[ \t]*(?:आयु[ \t]*:|उम्र[ \t]*:|[,;|\r\n]|$))"
+)
+
+
+def redact_declared_names(text):
+    names = {match["name"] for match in HINDI_NAME_LINE.finditer(text)}
+    for name in sorted(names, key=lambda n: (-len(n), n)):
+        words = r"[ \t]+".join(re.escape(word) for word in name.split())
+        pattern = rf"(?<![\w\u0900-\u0963]){words}(?![\w\u0900-\u0963])"
+        text, count = re.subn(pattern, "[PATIENT_NAME]", text)
+        Stats.identifiers += count
+    return text
+
+
 def process_text(text: str, rel: str, records: list, ids=None) -> str:
     pid = (ids or {}).get(RecordRef(rel, "doc"))
     records.append({"file": f"sanitized/{rel}", "loc": "doc", "patient": pid})
     Stats.records += 1
+    text = redact_declared_names(text)
     text, addresses = NOTE_ADDRESS.subn(r"\g<1>[ADDRESS]", text)
     text, births = NOTE_DOB.subn(r"\g<1>[DOB]", text)
     Stats.generalized += int(bool(addresses or births))
