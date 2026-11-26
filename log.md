@@ -156,3 +156,53 @@ trial 2
     
     Next: fix the biggest leak rows first, keep the medical values, then link patients.
     Also run: python3 validate_output.py --input dev/input --output my_output
+
+
+
+trial 3
+            ================================================================
+         SECRET WARDS practice self-check (rough guide, not the official score)
+        ================================================================
+        
+              1) PERSONAL DATA: 239 of 3230 pieces still visible (  7.4% leaked; lower is better)
+                 PATIENT_NAME     leaked   75 / 962    7.8%
+                 RELATIVE_NAME    leaked   49 / 232   21.1%
+                 HOUSE            leaked   38 / 136   27.9%
+                 LOCALITY         leaked   25 / 103   24.3%
+                 INSURANCE_ID     leaked   15 / 22    68.2%
+                 LANDMARK         leaked   15 / 64    23.4%
+                 MRN              leaked   10 / 850    1.2%
+                 PHONE            leaked   10 / 308    3.2%
+                 AADHAAR          leaked    2 / 71     2.8%
+                 EMAIL            leaked    0 / 1      0.0%
+                 PIN              leaked    0 / 136    0.0%
+                 VILLAGE          leaked    0 / 150    0.0%
+                 ABHA_NUMBER      leaked    0 / 46     0.0%
+                 DOB              leaked    0 / 111    0.0%
+                 AADHAAR_MASKED   leaked    0 / 16     0.0%
+                 PAN              leaked    0 / 22     0.0%
+                 by language: latin 5.9%, deva 17.5%, hinglish 34.2%
+                 by hiding place: content 6.9%, filename 0.0%, base64 90.0%, metadata 0.0%, key 50.0%, header 100.0%
+        
+              2) CANARIES: 0 of 4 planted canaries found in your output folder (each one costs -3 officially)
+        
+              3) MEDICAL DATA KEPT: 4855 of 4855 medical values survived (100.0%; higher is better)
+        
+              4) PATIENT LINKING: precision 1.00, recall 0.74, F0.5 0.94  (pseudonyms that wrongly merge different people: 0)
+        
+              5) RAW COPIES: 0 broken/unsupported files were copied out unchanged instead of quarantined (each costs -5 officially)
+        
+        Example leaks (type, language, place, file, text):
+            HOUSE | deva | content | registration/jeevanjyoti_patients.tsv | मकान नं. 32
+            LANDMARK | deva | content | registration/jeevanjyoti_patients.tsv | जामा मस्जिद के पीछे
+            HOUSE | latin | content | registration/jeevanjyoti_patients.tsv | H.No. 398
+            LANDMARK | latin | content | registration/jeevanjyoti_patients.tsv | near Hanuman Mandir
+            HOUSE | latin | content | registration/jeevanjyoti_patients.tsv | Makan No. 235
+            LOCALITY | latin | content | registration/jeevanjyoti_patients.tsv | Ward 6
+            LOCALITY | latin | content | registration/jeevanjyoti_patients.tsv | Mohalla Kashiram Colony
+            LANDMARK | latin | content | registration/jeevanjyoti_patients.tsv | near Hanuman Mandir
+            HOUSE | latin | content | registration/jeevanjyoti_patients.tsv | Makan No. 263
+            LOCALITY | latin | content | registration/jeevanjyoti_patients.tsv | Ward 11
+        
+        Next: fix the biggest leak rows first, keep the medical values, then link patients.
+        Also run: python3 validate_output.py --input dev/input --output my_output
