@@ -24,24 +24,36 @@ A name found on a registration form can help Secret Wards spot the same name in 
 
 In the record index, the same patient ID on two lines means the tool linked those records. A `null` ID means the tool could not assign an ID with the available evidence.
 
-## Run it
+## Run in the judging environment
 
-From the repository root, try the included sample with Python 3.10 or newer. The command-line tool uses only the Python standard library.
+The evaluator runs the commands in `raksha.toml` from the repository root. It creates a Python environment and runs this setup command once:
 
-**Linux or macOS**
-
-```bash
-RAKSHA_SECRET=practice python3 main.py --input frontend/sample --output demo_output
+```sh
+pip install -r requirements.txt
 ```
 
-**Windows Command Prompt**
+For each dataset, the evaluator sets `RAKSHA_SECRET` and starts the pipeline offline:
 
-```cmd
-set "RAKSHA_SECRET=practice"
+```text
+python main.py --input {input} --output {output}
+```
+
+The evaluator replaces `{input}` and `{output}` with its own folder paths. The pipeline reads the input folder and writes `sanitized/`, `report.json`, and `records.jsonl` into the output folder.
+
+### Try it locally
+
+With Python 3.10 or newer, run the setup command above. For a practice run on Linux or macOS, use the included sample and a new or empty output folder:
+
+```sh
+RAKSHA_SECRET=practice python main.py --input frontend/sample --output demo_output
+```
+
+In Windows PowerShell:
+
+```powershell
+$env:RAKSHA_SECRET = "practice"
 python main.py --input frontend/sample --output demo_output
 ```
-
-Open `demo_output` to see the three outputs. For the full practice run, replace `frontend/sample` with your practice input folder and choose a new or empty output folder. Use a private secret for real releases.
 
 **Local upload interface:** To choose files in a browser and download the cleaned release as a ZIP, run the following commands, then open [the local app](http://127.0.0.1:5058).
 
