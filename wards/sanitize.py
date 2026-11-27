@@ -12,7 +12,7 @@ import re
 from pathlib import PurePosixPath
 
 from .contracts import Decision, ParsedFile, RecordRef, SanitizeResult
-from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DOB, PATTERNS,
+from .detect import (GENERIC_BP_SUBJECTS, HINDI_NAME_LINE, NOTE_ADDRESS, NOTE_DOB, PATTERNS, PERSON_NAME,
                      RELATIVE_LABEL, VISIT_BP_SUBJECT, AGE_WITH_UNIT, PATIENT_CUE, table_schema, classify_header)
 from .formats import decode, dump_json, json_units, load_json, read_rows, write_rows
 from .names import Names, Redactor, declared_names, full_names, json_names
@@ -228,12 +228,17 @@ def _clean_value(v, parent_key, units=None):
     return v  # numbers, booleans, null keep their type
 
 # --------------------------------------------------------------------------- file names
-def clean_filename(rel: str) -> str | None:
+def clean_filename(rel: str, known: Redactor | None = None) -> str | None:
     """A neutral file name when the original holds personal data, else None."""
     path = PurePosixPath(rel)
     # Treat filename separators as boundaries for the existing identifier detectors.
     stem = path.stem.replace("_", " ")
-    sensitive = re.search(r"(?i)^discharge[ -]+summary[ -]+\S", stem)
+    words = re.sub(r"[.\s-]+", " ", stem).strip()
+    known_name = known is not None and known.pattern is not None and (
+        known.pattern.search(stem) or known.pattern.search(words)
+    )
+    sensitive = (known_name or re.fullmatch(PERSON_NAME, words)
+                 or re.search(r"(?i)^discharge[ -]+summary[ -]+\S", stem))
     if not sensitive and not any(rx.search(stem) for kind, rx in PATTERNS if kind in {"MRN", "PHONE", "AADHAAR", "PAN", "EMAIL"}):
         return None
     token = hmac.new(secret(), b"filename|" + rel.encode("utf-8"), hashlib.sha256).hexdigest()[:20]
@@ -370,7 +375,7 @@ def sanitize_file(parsed: ParsedFile, decisions: Decisions,
     _known = Redactor({**full_names(release_names or {}), **declared_names(parsed)})
     _count.order = detect_order(parsed.text)
     before = _count.identifiers
-    new_name = clean_filename(parsed.rel)
+    new_name = clean_filename(parsed.rel, _known)
     try:
         text, records, generalized = _CLEANERS[parsed.kind](parsed, decisions)
     finally:

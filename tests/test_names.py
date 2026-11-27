@@ -1,4 +1,5 @@
 import base64
+import re
 
 from wards.formats import read_file, read_rows
 from wards.sanitize import clean_value, sanitize_file
@@ -33,6 +34,20 @@ def test_fhir_names_are_removed_from_display_narrative_and_attachment():
 def test_release_wide_full_name_reaches_free_text_but_single_word_does_not():
     names = {"tara south": "[PATIENT_NAME]", "south": "[PATIENT_NAME]"}
     assert clean("n.txt", "Tara South seen. South wing.", names) == "[PATIENT_NAME] seen. South wing."
+
+
+def test_personal_filenames_get_neutral_output_names():
+    names = {"tara south": "[PATIENT_NAME]"}
+    for filename in ("Priya_Sharma.txt", "Priya-Sharma.txt", "Priya Sharma.txt",
+                     "visit.tara.south.02.txt"):
+        parsed = read_file(filename, b"Dose 5 mg")
+        output = sanitize_file(parsed, {}, names).new_name
+        assert re.fullmatch(r"file_[0-9a-f]{20}\.txt", output)
+
+    local = read_file("tara.csv", b"Patient Name,Dose\nTara,5 mg\n")
+    assert sanitize_file(local, {}).new_name
+    ordinary = read_file("weekly_visits.txt", b"Dose 5 mg")
+    assert sanitize_file(ordinary, {}, names).new_name is None
 
 
 def test_redacted_keys_never_overwrite_each_other():
