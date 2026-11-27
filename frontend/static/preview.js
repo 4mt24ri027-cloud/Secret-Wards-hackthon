@@ -9,6 +9,7 @@ languageNote.textContent = 'Cleaned files keep the original language, including 
 previewText.after(languageNote);
 
 function clearPreview() {
+    resetReview();
     previewZip = null;
     previewFile.replaceChildren();
     previewText.textContent = '';
@@ -16,6 +17,7 @@ function clearPreview() {
 }
 
 function showSelectedFile() {
+    selectReviewFile();
     const name = previewFile.value;
     try {
         const entries = fflate.unzipSync(previewZip, {filter: entry => entry.name === name});
@@ -40,7 +42,10 @@ async function previewRelease(blob) {
             return false;
         }});
         picker.hidden = !previewFile.length;
-        if (previewFile.length) showSelectedFile();
+        if (previewFile.length) {
+            showSelectedFile();
+            await prepareReview(previewZip, document.getElementById("files").files);
+        }
         else previewText.textContent = 'No cleaned files to display. The ZIP includes the processing report.';
     } catch {
         previewText.textContent = 'Preview unavailable. You can still download the ZIP.';
