@@ -77,7 +77,7 @@ $env:RAKSHA_SECRET = "practice"
 python main.py --input frontend/sample --output demo_output
 ```
 
-**Local upload interface:** To choose files in a browser and download the cleaned release as a ZIP, run the following commands, then open [the local app](http://127.0.0.1:5058).
+**Local upload interface:** To choose files in a browser and download the cleaned release as a ZIP, run the following commands.
 
 ```bash
 python -m pip install -r frontend/requirements.txt
