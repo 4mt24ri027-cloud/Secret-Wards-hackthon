@@ -52,12 +52,10 @@ python frontend/app.py
 
 ## Measured impact
 
-On one local practice run, Secret Wards processed **200 files in 1.14 seconds**, using **36 MiB** of peak memory. It released 195 files containing 823 records and quarantined five files it could not process.
+Pipeline revision `ae16b6f` processed 200 synthetic practice files in 3.75 seconds on the Windows development host. It released 195 files containing 823 records and set aside five. The organizer's checker found zero of 3,230 labeled personal details and zero of four planted identities. It retained 4,732 of 4,855 utility items (97.5%). Patient matching scored precision 1.00, recall 0.86 and F0.5 0.97.
 
-| Practice check | Result |
-|---|---|
-| Personal details still visible | The checker found 0 of 3,230 labeled items. |
-| Medical values preserved | 4,763 of 4,855 (98.1%). |
-| Patient matching | The tool recovered 74% of expected same-patient pairs. The checker found no incorrect merges. |
+**Hospital stays.** We compared admission and discharge dates in 24 notes with the organizer's known stay lengths. Keeping full shifted dates on those two labeled lines increased exact matches from 15 to 23. The remaining note used dates that could be read as either day-first or month-first. Other date fields in rare records can still show only the month.
 
-These figures describe the practice data. Even after names are removed, a distinctive diagnosis and visit pattern may still identify someone. The [two-page project brief](brief/Project_Brief.pdf) explains that remaining risk.
+**Privacy cost.** We joined released registration and discharge records by patient code. We counted distinct codes sharing a released age band, district field (including a hidden district), shifted admission week and first diagnosis code. Before the change, 14 patients had enough fields for this check and all 14 could be singled out in at least one group. Afterwards, all 20 eligible patients could be singled out. Adding stay length gave the same counts. A patient code alone gives no real name, but this result shows why people with outside knowledge may recognize a record. The official hidden attack score is unknown.
+
+See the [two-page project brief](brief/Project_Brief.pdf) for the design and results.
