@@ -269,3 +269,16 @@ def test_unfamiliar_files_keep_clinical_values_and_remove_identifiers():
     assert "Orla Venn" not in visit and "98.765.00236" not in visit and "111/73" in visit
     note = clean_file("handover.txt", "Seen today was Dalen Miro. Call back at 98.765.00237. Dose 2.5 mg.")
     assert "Dalen Miro" not in note and "98.765.00237" not in note and "2.5 mg" in note
+
+def test_rare_discharge_stay_crosses_month_and_keeps_followup_coarse():
+    from wards.contracts import Decision, RecordRef
+
+    ref = RecordRef("summary.txt", "doc")
+    decision = Decision(ref, "PSN-EXAMPLE", 9, 5, "district", suppress=True)
+    for admission, discharge in [("Date of Admission", "Date of Discharge"),
+                                 ("भर्ती की तारीख", "छुट्टी की तारीख")]:
+        source = f"{admission}: 2026-01-28\n{discharge}: 2026-02-06\nFollow-up: 2026-03-15"
+        result = sanitize_file(read_file(ref.file, source.encode()), {ref: decision}).text
+        assert f"{admission}: 2026-02-06" in result
+        assert f"{discharge}: 2026-02-15" in result
+        assert result.endswith("Follow-up: 2026-03")

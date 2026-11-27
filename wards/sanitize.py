@@ -60,7 +60,7 @@ def _enter(decisions: Decisions, rel: str, loc: str) -> str | None:
 
 # --------------------------------------------------------------------------- text and values
 
-def clean_text(text: str) -> str:
+def clean_text(text: str, *, keep_day: bool = False) -> str:
     """Replace known names and detected identifiers with typed placeholders."""
     text, count = _known.apply(text)
     _count.identifiers += count
@@ -71,7 +71,7 @@ def clean_text(text: str) -> str:
     for kind, rx in PATTERNS:
         text, n = rx.subn(f"[{kind}]" if kind != "NAME" else " [NAME]", text)
         _count.identifiers += n
-    return shift_dates(band_ages(text), _count.shift, _count.order, month_only=(_count.widen > 1))
+    return shift_dates(band_ages(text), _count.shift, _count.order, month_only=(_count.widen > 1 and not keep_day))
 
 def clean_person_name(value, placeholder):
     """Keep structured name shapes and replace only name-bearing strings."""
@@ -344,12 +344,20 @@ def _clean_json(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dic
     _count.shift, _count.widen = 0, 1
     return dump_json(clean_value(data, units=units)), records, generalized
 
+STAY_DATE_LINE = re.compile(
+    r"^[ \t]*(?:(?:date of (?:admission|discharge)|(?:admission|discharge) date)"
+    r"|(?:भर्ती|छुट्टी) की तारीख)[ \t]*:[ \t]*", re.I
+)
+
+
 def _clean_document(parsed: ParsedFile, decisions: Decisions) -> tuple[str, list[dict], int]:
     pid = _enter(decisions, parsed.rel, "doc")
     text = redact_declared_names(parsed.text)
     text, addresses = NOTE_ADDRESS.subn(r"\g<1>[ADDRESS]", text)
     text, births = NOTE_DOB.subn(r"\g<1>[DOB]", text)
-    text = (f"Patient: {pid}\n" if pid else "") + clean_text(text)
+    text = "".join(clean_text(line, keep_day=bool(STAY_DATE_LINE.match(line)))
+                   for line in text.splitlines(keepends=True))
+    text = (f"Patient: {pid}\n" if pid else "") + text
     return text, [{"loc": "doc", "patient": pid}], int(bool(addresses or births))
 
 _CLEANERS = {"table": _clean_table, "json": _clean_json, "text": _clean_document}
