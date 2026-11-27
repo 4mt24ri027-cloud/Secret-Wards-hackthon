@@ -24,6 +24,28 @@ A name found on a registration form can help Secret Wards spot the same name in 
 
 In the record index, the same patient ID on two lines means the tool linked those records. A `null` ID means the tool could not assign an ID with the available evidence.
 
+### Repository layout
+
+```text
+Secret-Wards-hackthon/
+|-- main.py                 Runs the cleaning pipeline
+|-- wards/                  Reads files, links visits and cleans records
+|-- config/
+|   |-- field_aliases.json  Recognizes different labels for the same field
+|   `-- policy.yaml         Sets rules for protecting patient details
+|-- frontend/               Optional browser interface
+|   |-- app.py              Sends uploaded files through the pipeline
+|   |-- templates/          Upload and results page
+|   |-- static/             Page styles and preview tools
+|   `-- sample/             Example records for a local trial
+|-- tests/                  Automated checks for the pipeline
+|-- assets/                 Architecture diagram
+|-- brief/                  Two-page project brief
+|-- raksha.toml             Setup and run commands for the judges
+|-- requirements.txt        Dependencies for the command-line run
+`-- README.md               Project overview and instructions
+```
+
 ## Run in the judging environment
 
 The evaluator runs the commands in `raksha.toml` from the repository root. It creates a Python environment and runs this setup command once:
